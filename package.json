@@ -1,0 +1,29 @@
+{
+  "name": "singalong-js",
+  "version": "0.1.0",
+  "description": "Decentralized karaoke system with local server and multiple client applications",
+  "private": true,
+  "workspaces": [
+    "server",
+    "shared",
+    "ui-library",
+    "admin-app",
+    "controller-app",
+    "player-app"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces"
+  },
+  "keywords": [
+    "karaoke",
+    "decentralized",
+    "react-native",
+    "node.js",
+    "typescript"
+  ],
+  "author": "",
+  "license": "MIT"
+}
