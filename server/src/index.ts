@@ -7,6 +7,31 @@ import dotenv from "dotenv";
 // Load environment variables
 dotenv.config();
 
+// Import database
+import { connectToDatabase, getDatabase } from "./db/connection";
+
+// Import repositories
+import {
+  RoomRepository,
+  UserRepository,
+  SongRepository,
+  QueueRepository,
+} from "./db/repositories";
+
+// Import services
+import { AuthService } from "./services/auth";
+import { RoomService, SessionService } from "./services/room";
+import { QueueService } from "./services/queue";
+import { WebSocketService } from "./services/websocket";
+
+// Import routes
+import { createAuthRouter } from "./routes/auth";
+import { createRoomRouter } from "./routes/rooms";
+import { createQueueRouter } from "./routes/queue";
+
+// Import middleware
+import { initAuthMiddleware } from "./middleware/auth";
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -19,55 +44,68 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: Date.now() });
 });
 
-// TODO: Import and register routes
-// import authRoutes from "./routes/auth";
-// import roomRoutes from "./routes/rooms";
-// import queueRoutes from "./routes/queue";
-// import songsRoutes from "./routes/songs";
-// import usersRoutes from "./routes/users";
+// Initialize and start server
+async function startServer() {
+  try {
+    // Connect to database
+    const db = await connectToDatabase();
+    console.log("✓ Database connected");
 
-// app.use("/auth", authRoutes);
-// app.use("/rooms", roomRoutes);
-// app.use("/queue", queueRoutes);
-// app.use("/songs", songsRoutes);
-// app.use("/users", usersRoutes);
+    // Initialize repositories
+    const roomRepo = new RoomRepository(db);
+    const userRepo = new UserRepository(db);
+    const songRepo = new SongRepository(db);
+    const queueRepo = new QueueRepository(db);
 
-// Error handling middleware
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error("Error:", err);
-  res.status(err.status || 500).json({
-    success: false,
-    error: err.message || "Internal server error",
-  });
-});
+    // Initialize services
+    const authService = new AuthService(userRepo, roomRepo);
+    const roomService = new RoomService(roomRepo, userRepo);
+    const sessionService = new SessionService(queueRepo, userRepo, roomRepo);
+    const queueService = new QueueService(queueRepo, songRepo, roomRepo);
 
-// Create HTTP server for WebSocket support
-const server = http.createServer(app);
+    // Initialize auth middleware
+    initAuthMiddleware(authService);
 
-// Initialize WebSocket server
-const wss = new WebSocketServer({ server });
+    // Create HTTP server for WebSocket support
+    const server = http.createServer(app);
 
-wss.on("connection", (ws) => {
-  console.log("WebSocket client connected");
+    // Initialize WebSocket server
+    const wss = new WebSocketServer({ server });
+    const wsService = new WebSocketService(wss);
+    console.log("✓ WebSocket service initialized");
 
-  ws.on("message", (data) => {
-    console.log("Received WebSocket message:", data);
-    // TODO: Handle WebSocket messages
-  });
+    // Register routes
+    app.use("/auth", createAuthRouter(authService));
+    app.use("/rooms", createRoomRouter(roomService, sessionService));
+    app.use("/queue", createQueueRouter(queueService));
+    console.log("✓ Routes registered");
 
-  ws.on("close", () => {
-    console.log("WebSocket client disconnected");
-  });
+    // Error handling middleware
+    app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+      console.error("Error:", err);
+      res.status(err.status || 500).json({
+        success: false,
+        error: err.message || "Internal server error",
+      });
+    });
 
-  ws.on("error", (error) => {
-    console.error("WebSocket error:", error);
-  });
-});
+    // Start server
+    server.listen(PORT, () => {
+      console.log(`🎤 Singalong Server listening on http://localhost:${PORT}`);
+      console.log(`📊 WebSocket server ready at ws://localhost:${PORT}`);
+    });
 
-// Start server
-server.listen(PORT, () => {
-  console.log(`🎤 Singalong Server listening on http://localhost:${PORT}`);
-  console.log(`📊 WebSocket server ready at ws://localhost:${PORT}`);
-});
+    // Graceful shutdown
+    process.on("SIGTERM", async () => {
+      console.log("SIGTERM signal received: closing HTTP server");
+      server.close(() => {
+        console.log("HTTP server closed");
+      });
+    });
+  } catch (error) {
+    console.error("Failed to start server:", error);
+    process.exit(1);
+  }
+}
 
-export { app, wss };
+startServer();

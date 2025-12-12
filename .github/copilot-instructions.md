@@ -1,825 +1,374 @@
-# AI Coding Agent Instructions – Singalong Karaoke System (Starter)
+# AI Coding Agent Instructions – Singalong Karaoke System
 
-This project implements a decentralized karaoke system with a local server and multiple client applications. The goal is to maintain modular, clean architecture so new features can be added without rewriting core logic.
+**Decentralized karaoke system** where users host their own servers locally. Built with Node.js (Express), React Native (Expo), TypeScript, MongoDB, and MinIO.
 
-## System Architecture
+## Quick Start for Agents
 
-**The system consists of:**
-- **Server (Node + TypeScript)** — runs locally on user's machine. Each user hosts their own server (NOT cloud-hosted).
-- **Admin App (React Native + Expo)** — runs on web browser, iOS, and Android. Shows current song, queue, reservations, users, approvals.
-- **Controller App (React Native + Expo)** — runs on web browser, iOS, and Android. For regular users with songbook search, reservations, queue status.
-- **Player App (React Native + Expo)** — runs on web browser, iOS, iPadOS, Android, tvOS, macOS, and Windows natively. Displays currently playing video/media and song metadata.
+### Architecture at a Glance
 
-## Infrastructure & Session Model
+```
+Server (Node.js + Express + WebSocket)
+├── 4 Client Apps (React Native + Expo):
+│   ├── Admin App (web, iOS, Android) — room/queue/user management, responsive design
+│   ├── Controller App (web, iOS, Android) — user song discovery & reservations
+│   ├── Player App (web, iOS, Android, tvOS, macOS, Windows) — displays now-playing
+│   └── (Each runs independently, synced via WebSocket)
+└── MongoDB + MinIO for persistence & file storage
+```
 
-### Room Lifecycle
-- **Admin creates a room** → generates 6-digit room number + QR code
-- **Admin joins the room** → gains full management access
-- **Admin starts session** (optional during room creation, or anytime after)
-- **Users/Controllers join the room** → enter nickname + optional passcode → see dashboard and songbook
-- **Player app joins** → displays currently playing song (auth managed by admin)
-- **Room ends** → admin closes session, all clients disconnect
+### Monorepo Structure (npm workspaces)
+- **`server/src/`** — Express app, routes (stubs), models, session management
+- **`shared/src/`** — Domain models (Room, User, Song, Queue) + utilities used by all
+- **`ui-library/`** — Reusable React Native components
+- **`{admin,controller,player}-app/`** — Client apps using Expo
 
-### Room Structure
-```ts
-interface Room {
-  id: string;                    // 6-digit room number (e.g., "482916")
-  passcodeProtected: boolean;    // If true, users must enter passcode
-  passcode?: string;             // Only stored on server, never transmitted to clients
-  qrCode: string;                // QR string/data for mobile scanning
-  createdBy: string;             // Admin ID
-  createdAt: number;             // Timestamp
-  sessionStarted: boolean;        // False until admin starts
-  status: "active" | "ended";    // Room active or closed
+### Commands
+```bash
+pnpm install              # Install all dependencies
+docker-compose up         # Start all services (server: 3000, admin: 3001, controller: 3002, player: 3003)
+npm run dev --workspaces  # Start dev servers (if configured in package.json)
+npm run build --workspaces
+npm run test --workspaces
+```
+
+### Critical Design Patterns
+
+**1. Room Lifecycle**
+- Admin creates room (generates 6-digit room number + QR code)
+- Admin starts session → players display QR code → users join via Controller
+- All clients sync via WebSocket; server is source of truth
+- Room ends when admin closes it
+
+**2. Authentication Model**
+- **Admin:** nickname + password (required, password-protected always)
+- **User (Controller):** nickname + optional password + optional room passcode
+- **Player:** server-assigned token (no user input)
+- **Key rule:** Nicknames are globally unique; one nickname per room at a time
+
+**3. Queue & Song Flow**
+- Users reserve songs from database → added to queue automatically (no approval)
+- Empty queue → first song plays immediately
+- Non-empty queue → song queued at end
+- User can only play/pause/skip their own song; admins can control any song
+- Song suggestion flow: URL → MediaProvider metadata extraction → OpenAI enhancement → user review → finalize
+
+**4. WebSocket Events (Critical for Sync)**
+All these must be broadcast to all clients in room:
+- `playback_started`, `playback_paused`, `playback_resumed` (payload: songId, currentTime)
+- `seek_changed` (payload: songId, seekTime)
+- `queue_updated`, `reservations_list_changed` (payload: queue array)
+- `song_changed` (payload: songId, title, artist, reservedBy, startTime)
+- `volume_changed`, `mute_toggled` (payload: volume, isMuted)
+
+**5. Shared Type System**
+- Domain models defined in `/shared/src/models.ts` (Room, User, Song, Session, etc.)
+- Both server and clients import from `/shared` to ensure consistency
+- API request/response types in `/server/src/models/api.ts`
+- No API serialization inconsistencies; strict TypeScript across all workspaces
+
+## Key File Locations
+
+| Purpose | Location |
+|---------|----------|
+| Domain models (Room, User, Song, Queue) | `shared/src/models.ts` |
+| Server entry point | `server/src/index.ts` |
+| API types (requests/responses) | `server/src/models/api.ts` |
+| Planned route stubs | `server/src/routes/` (TODO) |
+| Room/queue/session business logic | `server/src/services/` (TODO) |
+| Song discovery & metadata extraction | `server/src/media/` (TODO) |
+| Admin app screens | `admin-app/screens/` (TODO) |
+| Controller app screens | `controller-app/screens/` (TODO) |
+| Player app layers | `player-app/screens/` (TODO) |
+| Shared components | `ui-library/src/components/` |
+| Docker services config | `docker-compose.yml` |
+| Development helper scripts | `scripts/dev.sh` |
+
+## Implementation Priorities
+
+**Phase 1: Server Core (In Progress)**
+1. Implement room management routes (`POST /rooms`, `GET /rooms/:roomId`, `POST /rooms/:roomId/start-session`)
+2. Implement user authentication (admin login, user join room)
+3. Implement basic queue operations (add song, get queue, play/pause/skip)
+4. Set up MongoDB collections (rooms, users, songs, queue_items)
+5. Set up WebSocket event dispatcher
+
+**Phase 2: Client Apps**
+6. Admin app: responsive layout (desktop multi-panel, mobile tabs) with room dashboard
+7. Controller app: song search, suggestion, queue view, reservations
+8. Player app: 4-layer architecture (video, scoring overlay, UI overlays, controls)
+
+**Phase 3: Song Infrastructure**
+9. MediaProvider abstraction (YouTube integration first)
+10. Song suggestion flow (URL → OpenAI enhancement → database)
+11. Song search in local database
+
+**Phase 4: Advanced Features**
+12. Recommendation engine (room atmosphere + song history)
+13. Scoring system (post-song score display)
+14. Multi-player assignment
+15. Broadcast messaging to Player
+
+## Development Workflow When Adding Features
+
+### Adding a Server Endpoint
+1. Define request/response types in `server/src/models/api.ts`
+2. Create handler in `server/src/routes/[feature].ts` (create file if doesn't exist)
+3. Validate input at server layer (never trust client)
+4. If endpoint changes shared state (queue, room), emit WebSocket event from handler
+5. Update `server/src/index.ts` to register route: `app.use("/route-path", routeHandler)`
+6. If response type used by clients, add/update in `shared/src/models.ts`
+
+### Adding a Client Feature
+1. Create screen in `[app]/screens/[feature].tsx`
+2. Import types from `/shared/src/models.ts`
+3. Create API calls in `[app]/services/api.ts` (POST/GET/etc. to server)
+4. Subscribe to relevant WebSocket events in `useEffect` (listen for state changes)
+5. Render based on state; call API to send user actions
+6. Use components from `/ui-library/src/components/` (Button, Modal, etc.)
+
+### Room State Management Pattern
+- **Source of truth:** Server session store (in-memory + MongoDB persistence)
+- **Client behavior:** Always call server for state changes; listen to WebSocket for updates
+- **No local caching:** Clients re-fetch after mutations or wait for WebSocket broadcast
+- **Exception:** UI loading states (optimistic updates OK, but validate server response)
+
+## Authentication & Authorization Rules
+
+| Action | User | Admin |
+|--------|------|-------|
+| Create room | ✗ | ✓ |
+| Start/end session | ✗ | ✓ |
+| Join room | ✓ | ✓ |
+| Reserve song | ✓ | ✓ |
+| Play/pause own song | ✓ | ✓ |
+| Play/pause any song | ✗ | ✓ |
+| Skip any song | ✗ | ✓ |
+| Reorder queue | ✗ | ✓ |
+| Edit/delete songs | ✗ | ✓ |
+| Disconnect user | ✗ | ✓ |
+| Assign players | ✗ | ✓ |
+
+## Database Schema (MongoDB)
+
+```
+rooms {
+  id, roomNumber (6-digit UNIQUE), passcodeProtected, passcode (hashed),
+  qrCode, createdBy, createdAt, sessionStarted, status ("active"|"ended"),
+  atmosphere (optional)
 }
 
-interface Session {
-  roomId: string;
-  currentSong?: Song;            // Now playing
-  queue: Queue;                  // All queued songs
-  reservations: Reservation[];   // User song requests
-  participants: User[];          // Connected users/admins
-  createdAt: number;
-  startedAt?: number;
+users {
+  id, nickname (UNIQUE globally), password (hashed, nullable),
+  role ("admin"|"user"), roomId (nullable), joinedAt, lastActivity, songHistory
 }
 
-interface User {
-  id: string;                    // Server-assigned, unique globally
-  nickname: string;              // Unique globally across all rooms
-  password?: string;             // Required for admins; optional for regular users
-  role: "admin" | "user";        // Admin vs regular user
-  roomId: string;
-  joinedAt: number;
-  sessionToken?: string;         // For player app auth (TBD)
-  songHistory: string[];         // Track songs sung for future recommendations
+songs {
+  id, title, artist, duration (ms), language, fileUrl, provider,
+  providerId, lyrics (optional), tags[], metadata (JSON), createdAt, updatedAt
+}
+
+queue_items {
+  id, roomId, songId, addedBy, status ("pending"|"playing"|"completed"|"cancelled"),
+  addedAt, startedAt (optional), completedAt (optional)
+}
+
+songDrafts {
+  id, createdBy, roomId, providerId, tempFilePath, metadata (Song),
+  status ("pending"|"completed"|"cancelled"), createdAt, expiresAt
 }
 ```
 
-### Authentication & Access Control
+## MediaProvider Abstraction
 
-| App | Auth Type | Details |
-|-----|-----------|---------|
-| **Admin** | Basic auth (nickname/password) | Required. Admin creates rooms, manages session, controls playback. Always password-protected (mandatory). |
-| **Controller (User)** | Nickname + optional password (if user is regular) + optional room passcode | Regular users: optional password. Admins must use password when joining via controller (they should use admin app instead). Room may require passcode. |
-| **Player** | Server-assigned token | Admin provisions player device (TBD how: QR, manual, etc.). No user input. |
+**Pattern:** All song discovery goes through pluggable providers, not hardcoded YouTube logic.
 
-**Key Pattern:**
-- **Admin role:** Always password-protected. Authenticates via admin app with nickname/password. Can also join controller app but must provide password.
-- User join flow (Controller): `nickname` (required) → `user password` (if user has one set) → `room passcode` (if room requires it)
-- **Nickname uniqueness:** Global across server; admins always password-protected. Regular users with no password can be claimed by anyone.
-- **One nickname per room at a time:** A nickname can only exist in one room simultaneously. If a non-password user tries to join a different room with their current nickname, access is denied until they leave the first room.
-- **Password-protected nickname switching:** If a password-protected user tries to join a different room, their old session is automatically kicked out (useful for switching phones). Non-password users must manually leave first.
-- **Nickname collision in same room:** If another user tries to join the same room with an already-taken nickname (and that user has no password), access is denied until: (1) the original user leaves, OR (2) the original user is idle for 10+ minutes (auto-disconnected)
-- **User tracking:** All songs sung by a user are logged for future recommendation engine
-- Player is **one-time setup** — admin authenticates player during room config (mechanism TBD)
-
-## Permissions & Song Management
-
-### User Actions
-- **View:** Current song, queue, own reservations
-- **Playback control:** Play/pause/skip **only their own** reserved or currently singing song
-- **Queue management:** Cancel their own reserved songs ahead of time
-- **Song selection:** Reserve existing songs from the database; add new songs not yet in database
-
-### Admin Actions
-- **All user actions:** Admins can perform everything regular users can do
-- **Playback control:** Play/pause/skip **any song** currently playing (not just their own)
-- **Queue management:** Cancel, reorder, or edit any song in the queue
-- **Song management:** Edit song details; delete songs from database
-- **User management:** Disconnect users from room; manage session state
-
-### Song Approval Workflow
-Songs are **automatically added to queue** when a user reserves or adds them. No approval step required.
-
-## User Song Reservation & Queue Flow
-
-### Song Reservation Process
-1. **Song Book** — User browses songs in database
-   - Search by title, artist, language, tags
-   - See if song was already played in this room
-   - Option to replay if desired
-   - Click to reserve → added to queue
-
-2. **Suggest Song** — If song not found
-   - User types query → searches MediaProvider API
-   - Results show: title, artist, duration, thumbnail
-   - Indicators: "In Database", "Already in Queue", "Already Played"
-   - Select song to proceed OR try different search
-
-3. **Manual URL Entry** — User pastes direct link
-   - Validate URL with MediaProvider
-   - User can preview video (open in browser tab)
-   - Fetch metadata via MediaProvider
-
-4. **Enhancement Page** — Finalize song metadata
-   - Pre-filled from MediaProvider (or OpenAI extraction)
-   - User can edit: title, artist, language, lyrics, tags
-   - Preview before confirming
-   - Options: **Download Only** (add to DB) or **Download & Reserve** (add to DB + queue)
-
-### Queue Logic
-- **Empty Queue:** New song plays **immediately** (starts playback automatically)
-- **Non-Empty Queue:** Song added to end of queue
-- **User Controls:** Can play/pause/skip/remove **only their own** reserved song
-
-### Duplicate Song Handling
-- If song already in database → reuse existing entry
-- If song already in queue → user prompted "This song is already reserved. Play again?"
-- If song already played in room → user can still reserve (with notification)
-
-## Player App Features
-
-The Player App displays the currently playing song with:
-- **Now Playing:** Video/media playback from MediaProvider
-- **Score Display:** Show current singer's score (if applicable)
-- **Scrolling Reservation List:** Floating overlay showing upcoming songs (right-to-left scroll, like traditional videoke)
-- **User Session Stats:** List of all users currently in session with song count sung in this room/session
-- **QR Code & Room ID:** Display QR code linking to room (can auto-fill room ID in Controller or require manual entry, TBD)
-
-## Server Behavior & Scalability
-
-### Room Capacity
-- **Unlimited concurrent users** per room (practically, no hard limit enforced; assume <10K per room)
-
-### Server Restart & State Recovery
-- **Active rooms reload from database** on server startup
-- **Playback resumes** from the current song state (with adjusted timestamps)
-- **WebSocket connections re-establish** as clients reconnect
-- **Queue & user state** restored from persistent storage
-- No data loss for active sessions
-
-## Key API Endpoints
-
-### Authentication
-- `POST /auth/admin/login` — Admin login (nickname/password) → returns session token
-- `POST /auth/admin/logout` — Admin logout (clears session)
-- `POST /rooms/:roomId/join` — User join room (nickname + optional user password + optional room passcode)
-- `POST /rooms/:roomId/leave` — User leave room
-- `PATCH /users/:userId/password` — User set/update password (to "own" their nickname)
-
-### Room Management
-- `POST /rooms` — Create room (admin auth required)
-- `GET /rooms/:roomId` — Get room details
-- `POST /rooms/:roomId/join` — Join room (nickname + optional passcode)
-- `POST /rooms/:roomId/leave` — Leave room
-- `POST /rooms/:roomId/start-session` — Start session (admin only)
-- `POST /rooms/:roomId/end-session` — End session (admin only)
-
-### Queue & Playback
-- `GET /rooms/:roomId/queue` — Get full queue
-- `GET /rooms/:roomId/current-song` — Get now playing
-- `POST /rooms/:roomId/queue` — Add song to queue
-- `PATCH /rooms/:roomId/queue/:queueItemId` — Reorder/edit queue item (admin only)
-- `DELETE /rooms/:roomId/queue/:queueItemId` — Remove from queue
-- `POST /rooms/:roomId/queue/:queueItemId/play` — Play song (admin or owner)
-- `POST /rooms/:roomId/queue/:queueItemId/pause` — Pause song (admin or owner)
-- `POST /rooms/:roomId/queue/:queueItemId/skip` — Skip song (admin or owner)
-
-### Song Database
-- `GET /songs/search?q=...` — Search existing songs in database
-- `GET /songs/search-suggestions?q=...` — Search MediaProvider (YouTube) for song suggestions
-- `POST /songs/suggest` — Submit URL for song suggestion (returns draft with enhanced metadata)
-- `POST /songs/finalize` — Finalize draft, save to database, optionally reserve immediately
-- `DELETE /songs/suggest/:draftId` — Cancel suggestion and delete temporary files
-- `GET /admin/drafts` — View abandoned song drafts (admin only)
-- `PATCH /songs/:songId` — Edit song details (admin only)
-- `DELETE /songs/:songId` — Delete song (admin only)
-
-**Song Suggestion & Enhancement Flow:**
-- **Suggest** (`POST /songs/suggest`): User submits YouTube URL → server fetches metadata via MediaProvider → OpenAI extracts/enhances details → saves temporary file + draft record → returns draft to client
-- **Finalize** (`POST /songs/finalize`): User confirms/edits metadata → server validates → saves song to database → marks draft as completed → optionally adds to queue
-- **Cancel** (`DELETE /songs/suggest/:draftId`): User cancels before finalization → deletes temporary file → deletes draft record
-- **Admin Drafts** (`GET /admin/drafts`): Lists all abandoned drafts (not finalized within X hours) for cleanup/review
-- **Search Suggestions** (`GET /songs/search-suggestions?q=...`): Uses @distubejs/ytsr to search YouTube. If query doesn't contain karaoke-related terms ("karaoke", "instrumental", "off vocal", etc.), appends "karaoke" to query automatically
-
-**Suggest Endpoint Internal Flow:**
-1. Receive YouTube URL from client
-2. Use MediaProvider (distube/ytdl-core) to download media and extract raw metadata
-3. Pass extracted metadata to OpenAI for intelligent enhancement (infer title, artist, language, etc.)
-4. Save temporary media file to filesystem (with content-hash deduplication)
-5. Create SongDraft record with enhanced metadata
-6. Return draft to client for user review and editing
-
-**Search Suggestions Algorithm:**
-- User enters query (e.g., "Bohemian Rhapsody")
-- Check if query already contains karaoke keywords: "karaoke", "instrumental", "off vocal", "backing track", etc.
-- If NOT found: append " karaoke" to query → search for "Bohemian Rhapsody karaoke"
-- If FOUND: use query as-is → search for exact query
-- Use @distubejs/ytsr to fetch results from YouTube
-- Return list with: title, artist, duration, video URL, thumbnail
-
-**Draft Model:**
-```ts
-interface SongDraft {
-  id: string;                    // UUID, PK
-  createdBy: string;             // User ID who started suggestion
-  roomId: string;                // Room context (if applicable)
-  providerId: string;            // URL/ID from MediaProvider
-  tempFilePath: string;          // Path to temporary downloaded file
-  metadata: Song;                // Draft metadata (editable by user)
-  status: "pending" | "completed" | "cancelled";
-  createdAt: number;
-  expiresAt: number;             // Auto-delete after X hours if not finalized
-}
-```
-
-### User Management
-- `GET /rooms/:roomId/users` — Get users in room (with session stats)
-- `POST /rooms/:roomId/users/:userId/disconnect` — Disconnect user (admin only)
-- `PATCH /users/:userId` — Update user profile (set password, etc.)
-
-## Admin Workflow & Room Setup
-
-### Admin Session Flow
-1. **Server Setup** — Admin starts server via Docker
-2. **Access Admin App** — Web browser or native app (iOS/Android)
-3. **Create Room** — Can be created in advance or immediately before session starts
-   - Generates 6-digit room number + QR code
-   - QR code stored (S3 or filesystem)
-   - Room optionally passcode-protected
-   - Room optionally has atmosphere/category for recommendations
-4. **Assign Player(s)** — Select from available idle players
-   - Only idle players (not actively assigned to another room) can be assigned
-   - Multiple players can be assigned to same room
-   - WebSocket tracks player connection status (idle vs. active)
-5. **Start Session** — Admin explicitly starts the session
-   - Players display QR code + room ID for users to scan/enter
-   - Users begin connecting
-6. **Manage During Session** — Admin controls playback, queue, volume
-   - Play/pause/skip any song
-   - Reorder/edit queue
-   - Disconnect misbehaving users
-7. **End Session & Close Room** — Admin ends session
-   - Room must be explicitly closed; cannot be reused until closed
-   - Admin can view list of active rooms anytime
-
-### Player Assignment & Status
-- **Idle State:** Player connected but not assigned to any room
-- **Active State:** Player assigned to room, displaying QR + room ID
-- **WebSocket Events:** Server broadcasts player status changes (idle → active, disconnection)
-- **Hands-Free Design:** Player app has minimal UI; volume control available on Admin or Player UI
-
-### Volume Control
-- **Available On:** Player App, Admin App
-- **Synced Via:** WebSocket (real-time sync across all connected clients)
-- **Not Available On:** Controller App (users don't control volume)
-- **Event:** `volume_changed` broadcast to all clients in room
-
-## Client App UI Specifications
-
-### Player App
-
-**Single Screen Layout**
-
-- **Idle Mode:** Looped background video plays continuously while waiting for room connection
-- **Play Mode:** Full-screen video player displays the current song from the queue
-  - When queue becomes empty, reverts to looped background video
-
-**Layer Structure:**
-
-1. **Player Layer** — Full-screen video playback
-   - Displays current song from queue
-   - Handles video scaling and aspect ratio
-   - Reverts to looped background when queue is empty
-
-2. **Scoring Screen Layer** — Full-screen overlay (when active)
-   - Pops up after song finishes
-   - Displays randomly-generated score (70-100)
-   - Blocks interaction with player layer until dismissed
-   - Future: integrate with real scoring system (details TBD)
-
-3. **UI Overlays** — Always visible on top of active layer
-   - **Top Overlay — Queue Display**
-     - Shows upcoming songs in reservation list
-     - Scrolls right-to-left (traditional videoke style)
-     - Auto-scrolls if width exceeds screen; static if content fits
-     - **First item (leftmost):** Currently playing song with 🎤 emoji indicator
-     - **Following items:** Reserved songs in queue order
-     - Each displays: song title, artist, nickname of who reserved it
-   
-   - **Bottom Overlay — Message Scroll**
-     - Admin broadcasts PSA or messages to all users
-     - Scrolling text (direction TBD)
-     - Future feature; can be enhanced with styling/animations
-   
-   - **Bottom-Left Overlay — QR Code & Room ID**
-     - Displays QR code linking to room
-     - Room ID displayed below QR code (for manual entry)
-     - Semi-transparent to not obstruct video
-
-4. **Player Control Overlay** — Appears on interaction
-   - Triggered by cursor movement (web) or remote button press (TV)
-   - Auto-hides after inactivity
-   - Contains: Play/Pause, Skip, Seek Bar, Volume Control, Mute
-   - Synced with Admin App (volume/mute changes broadcast via WebSocket)
-
-## Song Infrastructure
-
-### Song Model
-```ts
-interface Song {
-  id: string;                    // UUID, PK
-  title: string;
-  artist: string;
-  duration: number;              // milliseconds
-  language: string;              // e.g., "en", "ja", "tl"
-  fileUrl: string;               // Link to downloaded file (S3 or local filesystem)
-  provider: string;              // Source (e.g., "youtube", "spotify")
-  providerId: string;            // ID from external provider
-  lyrics?: string;               // Optional lyrics text
-  tags: string[];                // For indexing/categorization (e.g., ["weeb", "anime", "2000s"])
-  metadata: object;              // JSON blob for provider-specific data
-  createdAt: number;
-  updatedAt: number;
-}
-
-interface ReservedSong {
-  id: string;                    // UUID, PK
-  roomId: string;                // FK to room
-  songId: string;                // FK to Song
-  reservedBy: string;            // User ID
-  status: "pending" | "playing" | "completed" | "cancelled";
-  addedAt: number;
-  startedAt?: number;
-  completedAt?: number;
-}
-```
-
-### Song Discovery Flow
-
-**1. Song Book (Database Search)**
-   - Display all songs in database
-   - Filter/search by title, artist, language, tags
-   - Show if song is already reserved (status, by whom)
-   - Click to reserve → confirm → added to queue
-
-**2. Suggest Song Screen (Media Provider Search)**
-   - User types song query → calls MediaProvider API (YouTube, Spotify, etc.)
-   - Display results with thumbnails
-   - Show if song already exists in database
-   - Show if song already in reservation list
-   - Select song to proceed
-
-**3. Manual URL Entry**
-   - User pastes direct URL (YouTube, etc.)
-   - Validate and fetch metadata via MediaProvider
-
-**4. Enhancements Page**
-   - Song metadata pre-filled from MediaProvider (or OpenAI extraction)
-   - User can manually edit: title, artist, language, lyrics, tags
-   - Preview file before confirming
-   - **Download & Reserve** — adds to database and reserves immediately
-   - **Download Only** — adds to database, user can reserve later
-
-### Room Atmosphere & Recommendations
-```ts
-interface Room {
-  // ... existing fields ...
-  atmosphere?: string;           // Optional: "weeb", "traditional", "pop", etc.
-}
-```
-- Helps recommendation engine suggest relevant songs (e.g., suggest Japanese songs for "weeb" rooms)
-- Can be set by admin during room creation or updated later
-
-### MediaProvider Pattern
-The `MediaProvider` interface abstracts song fetching and metadata extraction:
 ```ts
 interface MediaProvider {
   searchSongs(query: string): Promise<Song[]>;
   getSongMetadata(id: string): Promise<SongMetadata>;
-  extractMetadata(url: string): Promise<SongMetadata>;  // For manual URL entry
+  extractMetadata(url: string): Promise<SongMetadata>;
 }
 ```
-Implementations (YouTube, Spotify, local files) go in `/server/media/[provider].ts`. Register new providers in `/server/media/registry.ts`.
 
-### File Storage Strategy
-- **Plain filesystem** (preferred): Store downloaded files in `/server/media/files/` or similar
-- **S3-style** (alternative): Abstract behind a storage interface for future cloud migration
-- Use content hashing (SHA256) of URL to avoid re-downloading duplicates
+- Implementations in `/server/src/media/[provider].ts` (e.g., `youtube.ts`, `spotify.ts`)
+- Register in `/server/src/media/registry.ts`
+- **Search suggestions algorithm:** If query lacks karaoke keywords ("karaoke", "instrumental", "off vocal"), append " karaoke" before searching
+- File storage: Plain filesystem (or S3 abstraction later); use SHA256 content hash to avoid re-downloading
 
-## Docker & Infrastructure
+## Admin App Responsive Design
 
-### Services Architecture
-```yaml
-docker-compose.yml contains:
-- server          # Node.js backend (Express/Hono)
-- admin-app       # React Native Expo (web browser)
-- controller-app  # React Native Expo (web browser)
-- mongodb         # Primary database
-- minio           # S3-compatible object storage for song files
-- cloudflared     # Tunnel for remote access (optional)
-```
+**One codebase, two layouts:**
+- **Desktop (≥768px):** Multi-panel grid (player controls, downloads, queue, users visible simultaneously)
+- **Mobile (<768px):** Tab-based navigation (one screen at a time)
 
-### Service Details
+Use `useResponsive()` hook to detect viewport; conditional rendering handles layout switch.
 
-**Server**
-- Port: `3000` (REST API)
-- Depends on: MongoDB, MinIO
-- Volumes: Song cache, logs
-- Environment: DB connection, MinIO credentials, MediaProvider keys
+**Admin App Screens:**
+1. **Login** — nickname/password
+2. **Rooms Management** — list, create, edit, close rooms
+3. **Songs Management** — search, add, edit, delete songs
+4. **Room Dashboard** — 4 panels: player controls, downloads progress, queue, participants
 
-**Admin & Controller Apps**
-- Ports: `3001` (admin), `3002` (controller) — dev/built server
-- Depends on: Server (network connectivity)
-- Serves web UI via Expo bundler or production build
+## Controller App (Mobile-Only)
 
-**MongoDB**
-- Port: `27017`
-- Volume: `/data/db` (persistent storage)
-- Initialization: Auto-create indexes on startup
+**Screens:**
+1. **Login** — nickname + room ID
+2. **Secondary Auth** (if needed) — password + room passcode
+3. **Dashboard** — now playing, user's reservations, "Song Book" button
+4. **Song Book** — browse/search database
+5. **Suggestion** — search MediaProvider results
+6. **Manual URL** — paste direct link
+7. **Enhancement** — edit metadata, preview, download/reserve
 
-**MinIO**
-- Port: `9000` (API), `9001` (console)
-- Volume: `/data` (persistent object storage)
-- Credentials: Set via environment variables
-- Use for: Song file storage (S3-compatible API)
+## Player App (4-Layer Architecture)
 
-**Cloudflared** (Optional)
-- Exposes server publicly via secure tunnel
-- No direct port exposure
-- Useful for: Remote room access, testing on real devices
+1. **Player Layer** — Full-screen video playback; reverts to looped background if queue empty
+2. **Scoring Layer** — Full-screen score overlay (pops up after song, blocks interaction)
+3. **UI Overlays** (always on top):
+   - Top: Queue/reservation list (scrolls right-to-left; first item = now playing with 🎤)
+   - Bottom: Admin broadcast messages (scrolling text)
+   - Bottom-left: QR code + room ID
+4. **Controls** — Play/Pause, Skip, Seek, Volume (appear on interaction, auto-hide, synced via WebSocket)
 
-### Local Development Setup
-```bash
-# Install pnpm (first time only)
-npm install -g pnpm
+## Testing & Quality
 
-# Install all dependencies
-pnpm install
+- **Unit tests:** Jest in `/server/services/__tests__` (mock session/queue state)
+- **No integration tests yet** (focus on single-unit logic)
+- **Strict TypeScript:** tsconfig.json has `strict: true` in all workspaces; no `any`
+- **Error handling:** Server layer validates all input; clients show user-friendly messages
+- **Logging:** Use `console.error()` for issues; structured logging (Winston, Pino) optional later
 
-# Start all services
-docker-compose up
+## Common Pitfalls to Avoid
 
-# Access points:
-# - Server API: http://localhost:3000
-# - Admin app: http://localhost:3001
-# - Controller app: http://localhost:3002
-# - MinIO console: http://localhost:9001
-# - MongoDB: mongodb://localhost:27017
-```
+- ❌ **Client-side state caching:** Always fetch from server after mutations
+- ❌ **Hardcoded MediaProvider logic:** Use `/media/` abstraction instead
+- ❌ **Modifying session state outside `/server/src/services/`:** Centralize all mutations
+- ❌ **Unhandled async in React useEffect:** Always clean up subscriptions
+- ❌ **Missing WebSocket broadcasts:** If state changes, emit event so all clients sync
+- ❌ **Nickname scoping confusion:** Nicknames are globally unique, but still checked per-room
+- ❌ **Trusting client input:** Validate roomId, userId, permissions on server before action
 
-### Environment Variables
-Server needs:
-- `MONGODB_URI` — connection string to MongoDB
-- `MINIO_ENDPOINT` — MinIO API endpoint
+## Environment Variables Required
+
+Server needs (in `.env` or `docker-compose.yml`):
+- `MONGODB_URI` — MongoDB connection (e.g., `mongodb://mongodb:27017/singalong`)
+- `MINIO_ENDPOINT` — MinIO API endpoint (e.g., `http://minio:9000`)
 - `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` — MinIO credentials
-- `MEDIA_PROVIDER_API_KEY` — YouTube Data API key (if using YouTube provider)
-- `OPENAI_API_KEY` — for song metadata extraction (optional)
+- `MEDIA_PROVIDER_API_KEY` — YouTube API key (if using YouTube provider)
+- `OPENAI_API_KEY` — For song metadata extraction (optional)
+- `NODE_ENV` — `development` or `production`
 
-## Database & Persistence
+Clients need (via `EXPO_PUBLIC_*` prefix in docker-compose or `.env`):
+- `EXPO_PUBLIC_API_URL` — Server URL (e.g., `http://localhost:3000`)
 
-### Storage Strategy
-- **SQLite or PostgreSQL** (TBD) — persistent local/networked storage for rooms, users, sessions
-- **In-memory state** — active queue, current playback, live WebSocket connections (rebuilds on server restart)
-- No migration framework required yet; schema evolution handled via server-side setup scripts
+## Useful Links & References
 
-### Core Tables/Collections
+- **Shared domain models:** `/shared/src/models.ts` — read this first to understand Room, User, Song, Queue
+- **API types:** `/server/src/models/api.ts` — request/response shapes for each endpoint
+- **Development helper:** `scripts/dev.sh` — helper commands (not yet implemented, but can extend)
+- **Architecture docs:** `README.md`, `PROJECT_STRUCTURE.md`, `QUICK_REFERENCE.md` in root
+
+---
+
+## Expanded Reference (For Deep Dives)
+
+### Full Authentication Details
+- **Admin:** Always password-protected. Can only join via admin app (or controller app with password).
+- **User (no password):** Can join same room from any device without password; first login "claims" the nickname.
+- **User (password-protected):** Owns nickname globally; can join different rooms, auto-kicks old session.
+- **Nickname collision (same room):** If non-password user tries to join same room with taken nickname, denied until original leaves or goes idle 10+ min.
+- **Room passcode:** Optional; applied to all joiners (not per-user).
+
+### Full Queue Logic
+- **Empty queue → new song:** Plays immediately
+- **Non-empty queue → new song:** Queued at end
+- **Duplicate handling:**
+  - Already in database → reuse existing entry
+  - Already in queue → user prompted to confirm replay
+  - Already played in room → user can still reserve (with notification)
+- **User controls:** Can only play/pause/skip their own song
+- **Admin controls:** Can play/pause/skip/reorder any song
+- **Song cancellation:** Users can cancel their own song before it starts
+
+### Full Song Suggestion Flow
+1. **User submits URL** → server fetches via MediaProvider (ytdl-core, distube, etc.)
+2. **Metadata extraction** → raw title, artist, duration from provider
+3. **OpenAI enhancement** (optional) → intelligent inference of title, artist, language, tags
+4. **Draft created** → user reviews/edits metadata in app
+5. **Finalize** → validate, save to MongoDB, mark draft complete, optionally reserve immediately
+6. **Cancel** → delete temporary files, delete draft record
+7. **Admin cleanup** → find abandoned drafts (not finalized within X hours), review for deletion
+
+### Full Room Lifecycle with Sessions
+1. **Admin creates room** → generates 6-digit roomNumber + QR code
+2. **Admin joins** (via admin app) → gains full control
+3. **Admin starts session** (optional during creation, or later) → sessionStarted = true
+4. **Users join** (via controller) → added to participants list
+5. **Player assigned** → displays QR code + room ID for users to scan
+6. **Session active** → queue running, playback synced via WebSocket
+7. **Admin ends session** → sessionStarted = false, all playback paused
+8. **Admin closes room** → status = "ended", connections closed, room no longer joinable
+9. **Admin can reopen room** (TBD) — or must create new one
+
+### WebSocket Event Details
+All events follow structure:
+```ts
+{ type: string, roomId: string, payload: {...}, timestamp: number }
 ```
-rooms
-  ├── id (UUID, PK)
-  ├── roomNumber (6-digit string, UNIQUE) — user-facing room ID (000000-999999)
-  ├── passcodeProtected (boolean)
-  ├── passcode (encrypted string, nullable)
-  ├── qrCode (string)
-  ├── createdBy (user ID, FK)
-  ├── createdAt (timestamp)
-  ├── sessionStarted (boolean)
-  ├── vibe (string, nullable) — optional atmosphere/category
-  └── status (enum: "active" | "ended")
 
-users
-  ├── id (UUID, PK)
-  ├── nickname (string, UNIQUE globally)
-  ├── password (hashed string, nullable)
-  ├── role (enum: "admin" | "user")
-  ├── roomId (FK to rooms, nullable — user in room or not)
-  ├── joinedAt (timestamp)
-  ├── lastActivity (timestamp — for idle detection)
-  └── songHistory (array of song IDs)
+**Playback:**
+- `playback_started` → {songId, currentTime}
+- `playback_paused` → {songId, currentTime}
+- `playback_resumed` → {songId, currentTime}
 
-songs (MediaProvider cache)
-  ├── id (provider-specific ID, PK)
-  ├── title (string)
-  ├── artist (string)
-  ├── duration (milliseconds)
-  ├── provider (enum: "youtube" | "spotify" | etc.)
-  └── metadata (JSON blob)
+**Seeking:**
+- `seek_changed` → {songId, seekTime}
 
-queue_items
-  ├── id (UUID, PK)
-  ├── roomId (FK)
-  ├── songId (FK)
-  ├── addedBy (user ID, FK)
-  ├── status (enum: "pending" | "playing" | "completed")
-  └── addedAt (timestamp)
+**Queue:**
+- `queue_updated` → {queue: ReservedSong[]}
+- `song_changed` → {songId, title, artist, reservedBy, startTime}
 
-reservations (user song requests, future feature)
-  ├── id (UUID, PK)
-  ├── roomId (FK)
-  ├── userId (FK)
-  ├── songId (FK)
-  └── createdAt (timestamp)
-```
+**Users:**
+- `user_joined` → {userId, nickname, roomId}
+- `user_left` → {userId, roomId}
+- `user_disconnected` → {userId, reason}
 
-### Query Patterns
-- Find active rooms (status = "active")
-- Find user by nickname (global lookup)
-- Find all songs in queue for a room (ordered by addedAt)
-- Find users idle >10 minutes (for auto-disconnect logic)
-- Find user's song history (for recommendations)
-- Check nickname availability in room
+**Volume:**
+- `volume_changed` → {volume: 0-100}
+- `mute_toggled` → {isMuted: boolean}
 
-## Project Structure & Conventions
-
-### Monorepo Organization
-```
-singalong-js/
-├── server/              # Node.js backend
-│   ├── routes/         # Express/Hono route handlers
-│   ├── services/       # Business logic (queue mgmt, session state)
-│   ├── models/         # TypeScript interfaces (Song, Queue, User, etc.)
-│   ├── media/          # MediaProvider implementations
-│   ├── session/        # Session manager, queue handler, event dispatcher
-│   └── index.ts        # Server entry point
-├── admin-app/          # React Native + Expo (web, iOS, Android)
-├── controller-app/     # React Native + Expo (web, iOS, Android)
-├── player-app/         # React Native + Expo (web, iOS, Android, tvOS, macOS, Windows)
-├── shared/             # TypeScript types used across all apps
-├── ui-library/         # Shared React Native components (buttons, modals, inputs, etc.)
-└── package.json        # Monorepo root (npm workspaces)
-```
+**Messages:**
+- `broadcast_message` → {message: string, sender: "admin"}
 
 ### Cross-Platform Client Architecture
-Each client app (Admin, Controller, Player) is a **separate React Native + Expo project**:
-- Individual `package.json` with own dependencies
-- Separate Expo build configurations
-- Can be deployed/updated independently
-- All three use `react-native-web` for browser rendering, native modules for iOS/Android
-- **React Navigation** for cross-platform routing
-- Share common types from `/shared` and UI components from `/ui-library`
+Each client (Admin, Controller, Player) is independent Expo project:
+- Can be deployed/updated separately
+- All use `react-native-web` for browser rendering
+- Native code (iOS/Android) via Expo modules
+- Shared types from `/shared/src/models.ts`
+- Shared components from `/ui-library/src/components/`
+- App-specific services in `[app]/services/` (API calls, WebSocket subscriptions)
 
-**Shared Resources:**
-- `/shared` — TypeScript interfaces (Song, User, Queue, etc.) imported by all apps
-- `/shared/services` — Shared utility functions (e.g., filtering reservations, formatting metadata, API response handling)
-- `/ui-library` — Reusable React Native components (buttons, modals, search bars, etc.) imported by all apps
-- Server imports from `/shared` for consistent type definitions and serialization
-- Each app has its own services layer for app-specific business logic (API calls, WebSocket subscriptions, etc.)
+**Key pattern:** No app-specific state in other apps. Server is source of truth.
 
-## Development Guidelines
-- **No global state outside of session/services** — React components should read from server, not local Redux/Context.
-- **Event-driven architecture** — server state changes broadcast via WebSocket; clients listen and re-fetch if needed.
-- **Validate at server layer** — clients trust server data but server validates all user inputs.
-- **Avoid bidirectional sync** — only server→client updates via WebSocket; client→server is explicit REST calls.
+### Room Atmosphere & Recommendations (Future)
+Rooms can have optional `atmosphere` field ("weeb", "traditional", "pop", etc.):
+- Used by recommendation engine to suggest relevant songs
+- E.g., "weeb" rooms suggest Japanese/anime songs
+- Set by admin during room creation or updated later
 
-## Common Pitfalls to Avoid
-- ❌ Caching client-side user/queue state without server refresh
-- ❌ Modifying session state outside of `/session/manager.ts`
-- ❌ Hardcoding MediaProvider logic instead of using the pluggable interface
-- ❌ Mixing async operations without proper error handling in React useEffect
+### MinIO File Storage
+Song files stored in MinIO (S3-compatible):
+- Bucket: `singalong-songs` (created on startup)
+- Key format: `[providerId]/[contentHash].[ext]` (e.g., `youtube-abc123/sha256hash.mp4`)
+- Enables content deduplication (same URL never re-downloaded)
+- Can migrate to cloud S3 later via S3 API compatibility
 
-### TypeScript & Code Style
-- **Strict mode enabled** in `tsconfig.json` across all workspaces.
-- Domain models (Song, User, Queue, Session) are defined in `/shared/models` and imported by both server and clients.
-- Use explicit typing; avoid `any` except in legacy integration points.
+### Default Admin Credentials
+- Username: `admin`
+- Password: `P@ssw0rd!` (configurable via environment)
 
-## Real-Time Communication
+---
 
-Server emits events to all connected clients via WebSocket:
-```ts
-{
-  type: string;       // event type
-  roomId: string;     // room context
-  payload: {...};     // event-specific data
-  timestamp: number;  // server timestamp
-}
-```
-
-### Critical Sync Events
-These events are broadcast to all connected clients in a room and must be kept in sync across Player, Admin, and Controller apps:
-
-1. **Playback Status**
-   - `playback_started` — Song began playing
-   - `playback_paused` — Song paused
-   - `playback_resumed` — Song resumed
-   - Payload: `{ songId, currentTime }`
-
-2. **Seek Position**
-   - `seek_changed` — User seeked to new position (via Player Controls or Admin)
-   - Payload: `{ songId, seekTime }`
-
-3. **Queue Updates**
-   - `queue_updated` — Song added, removed, or reordered
-   - `reservations_list_changed` — Updated list of all reserved songs
-   - Payload: `{ queue: ReservedSong[] }`
-
-4. **Current Song**
-   - `song_changed` — Different song now playing
-   - Payload: `{ songId, title, artist, reservedBy, startTime }`
-
-5. **Volume Control**
-   - `volume_changed` — Volume adjusted (from Player or Admin App)
-   - `mute_toggled` — Mute state changed
-   - Payload: `{ volume: number (0-100), isMuted: boolean }`
-
-Clients subscribe to these events and update their UI accordingly. Admin App changes (e.g., skip, volume) are sent to server, which broadcasts to all clients for consistency.
-
-## Admin App: Single Responsive Codebase
-
-The Admin App uses **one React codebase** that adapts to different screen sizes:
-- **Desktop (≥768px)**: Multi-panel grid layout with multiple screens visible simultaneously (Queue, Users, Reservations, etc.)
-- **Mobile (<768px)**: Tab-based navigation with one screen at a time
-
-**Structure:**
-```
-admin-app/
-├── screens/        # Individual screens (Login, RoomsManagement, SongsManagement, RoomDashboard, etc.)
-├── layouts/
-│   ├── DesktopLayout.tsx    # Multi-column grid, shows all panels
-│   ├── MobileLayout.tsx     # Tabbed interface, one screen at a time
-│   └── RootLayout.tsx       # Detects viewport and chooses layout
-├── hooks/
-│   └── useResponsive.ts     # Detects mobile/desktop based on viewport
-└── components/
-    └── ScreenCard.tsx       # Wraps each screen (handles borders, scrolling)
-```
-
-**Key Pattern:**
-- Use a single responsive hook (`useResponsive()`) that returns `isMobile: boolean`
-- All screens share the same data/WebSocket subscriptions — no duplication
-- Layout composition changes based on screen size, not separate apps
-- Tabbed navigation on mobile can use React Router params or a context-based tab state
-
-### Admin App Screens
-
-**1. Login Screen**
-- Username/password login for admin
-- Initial seed: username `admin`, password `P@ssw0rd!` (configurable later)
-
-**2. Rooms Management Screen**
-- List of all rooms (active and closed)
-- Create new room (with optional passcode, atmosphere/category)
-- View/edit room details
-- Close room (no delete; records preserved for audit trail)
-
-**3. Songs Management Screen**
-- Browse songs in database
-- Search by title, artist, language, tags
-- Add new songs (using admin version of suggestion flow)
-- Edit song details (title, artist, language, lyrics, tags)
-- Delete songs (admin capability)
-
-**4. Room Dashboard Screen (3-Panel Layout)**
-
-   **4.1 Player Controls Panel (Top-Left)**
-   - Currently playing song: title, artist, who reserved it
-   - Playback controls: Play, Pause, Skip
-   - Seek bar with current time / total duration
-   - Volume control + Mute button
-   - Player Selection dropdown: assign idle players to this room
-
-   **4.2 Downloads Panel (Bottom-Left)**
-   - Show progress of songs being downloaded from MediaProvider
-   - Display: song title, artist, download progress bar with status (pending, downloading, completed, failed)
-   - Can be a collapsible panel or mini popup to not clutter the dashboard
-
-   **4.3 Reservation List Panel (Top Right)**
-   - Full queue/reservation list with status (pending, playing, completed)
-   - Tap song to view details in modal (title, artist, duration, who reserved)
-   - Tap to edit song details, reorder queue, or remove song
-   - Admin can reserve songs for other users:
-     - Choose existing user by nickname OR
-     - Create new user by specifying nickname (if doesn't exist)
-   - Duplicate song handling: shows notification if song already in queue/played
-
-   **4.4 Participants List Panel (Bottom-Right)**
-   - List of all users in room with status
-   - Idle detection: users inactive for 10+ minutes marked as "Idle" (auto-disconnect)
-   - Display: nickname, role (admin/user), join time, last activity time
-   - Actions: Kick user (remove from room), Ban user (TBD if needed)
-
-**Navigation & Menu**
-- Global menu/header for navigation between screens
-- Logout button
-- Room selection/quick-access if managing multiple rooms
-
-### Controller App: User Song Discovery & Reservation
-
-The Controller App is the user-facing interface for browsing, discovering, and reserving songs.
-
-**Mobile-Only Design** — Optimized for iOS, Android, and web browsers on mobile devices (phones/tablets)
-
-**Main Screens:**
-
-**1. Login Screen**
-- Nickname field (required)
-- Room ID field (required)
-- "Join" button
-
-**2. Secondary Auth Screen** (if needed)
-- User Password field (if user nickname is password-protected)
-- Room Passcode field (if room requires passcode)
-- Single screen for both (one auth call validates both)
-- "Confirm" button
-
-**3. Dashboard Screen**
-- **Now Playing Section:** Current song title, artist, who reserved it
-  - Song details button (view lyrics if available)
-  - Play/Pause/Skip buttons (only if user reserved the current song)
-- **Reservations List:** User's reserved songs with status
-  - Tap to view details modal (read-only, admin cannot edit from here)
-  - Remove button for each song
-- **Floating "Song Book" Button:** Opens song discovery flow
-
-**4. Song Book Screen**
-- Browse all songs in database
-- Search by title, artist, language, tags
-- Recommendation section (based on room atmosphere)
-- "Suggest New Song" button (if song not found)
-
-**5. Suggestion Screen** (MediaProvider Search)
-- Search bar for song query
-- Results list with thumbnails
-- Each item shows: title, artist, duration, indicators ("In Database", "Already Queued", "Already Played")
-- Context menu per item:
-  - "Select Song" → go to Enhancement Screen
-  - "Preview" → open external app (YouTube, etc.)
-
-**6. Manual URL Entry Screen**
-- Text input for direct song URL (YouTube, etc.)
-- "Continue" button (validates and fetches metadata)
-
-**7. Enhancement Screen**
-- Pre-filled metadata from provider (or OpenAI extraction)
-- Editable fields: Title, Artist, Language, Thumbnail, Lyrics
-- "Search for Lyrics" button → opens Google search with title+artist
-- "Download Only" button → adds to database
-- "Download & Reserve" button → adds to database + queue immediately
-
-**Layout Notes:**
-- Single screen optimized for mobile
-- No responsive desktop layout (mobile-only focus)
-- Clear navigation flow: Dashboard → Song Book → Suggestion/URL → Enhancement → Queue
-
-## Admin App: Single Responsive Codebase
-
-The Admin App uses **one React codebase** that adapts to different screen sizes:
-- **Desktop (≥768px)**: Multi-panel grid layout with multiple screens visible simultaneously (Queue, Users, Reservations, etc.)
-- **Mobile (<768px)**: Tab-based navigation with one screen at a time
-
-**Structure:**
-```
-admin-app/
-├── screens/        # Individual screens (Queue, Users, Reservations, Approvals, etc.)
-├── layouts/
-│   ├── DesktopLayout.tsx    # Multi-column grid, shows all panels
-│   ├── MobileLayout.tsx     # Tabbed interface, one screen at a time
-│   └── RootLayout.tsx       # Detects viewport and chooses layout
-├── hooks/
-│   └── useResponsive.ts     # Detects mobile/desktop based on viewport
-└── components/
-    └── ScreenCard.tsx       # Wraps each screen (handles borders, scrolling)
-```
-
-**Key Pattern:**
-- Use a single responsive hook (`useResponsive()`) that returns `isMobile: boolean`
-- All screens share the same data/WebSocket subscriptions — no duplication
-- Layout composition changes based on screen size, not separate apps
-- Tabbed navigation on mobile can use React Router params or a context-based tab state
-
-### Adding a New Server Endpoint
-1. Define request/response types in `/server/models/api.ts`
-2. Add handler in `/server/routes/[feature].ts`
-3. Update `/shared/models` if response type is used by clients
-4. Emit WebSocket event from the handler if it affects client state
-
-### Adding a New Client Feature
-1. Create container component in `/[app]/screens/[feature]`
-2. Import types from `/shared/models`
-3. Call server API via `/[app]/services/api.ts`
-4. Subscribe to relevant WebSocket events in `useEffect`
-
-### Testing Server Logic
-- Unit tests for service logic live in `/server/services/__tests__`
-- Use Jest and mock queue/session state; avoid integration tests for now
-
-## MediaProvider Pattern
-The `MediaProvider` interface abstracts song fetching and metadata extraction:
-```ts
-interface MediaProvider {
-  searchSongs(query: string): Promise<Song[]>;
-  getSongMetadata(id: string): Promise<SongMetadata>;
-}
-```
-Implementations (YouTube, Spotify, local files) go in `/server/media/[provider].ts`. Register new providers in `/server/media/registry.ts`.
-
-## Development Guidelines
-- **No global state outside of session/services** — React components should read from server, not local Redux/Context.
-- **Event-driven architecture** — server state changes broadcast via WebSocket; clients listen and re-fetch if needed.
-- **Validate at server layer** — clients trust server data but server validates all user inputs.
-- **Avoid bidirectional sync** — only server→client updates via WebSocket; client→server is explicit REST calls.
-
-## Common Pitfalls to Avoid
-- ❌ Caching client-side user/queue state without server refresh
-- ❌ Modifying session state outside of `/session/manager.ts`
-- ❌ Hardcoding MediaProvider logic instead of using the pluggable interface
-- ❌ Mixing async operations without proper error handling in React useEffect
+**Last Updated:** December 2025  
+**Scaffolding Status:** Core architecture & models defined; routes/services in TODO; client screens in TODO
