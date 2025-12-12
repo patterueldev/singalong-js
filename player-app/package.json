@@ -14,15 +14,12 @@
   },
   "dependencies": {
     "expo": "^49.0.0",
-    "expo-video": "^13.2.0",
+    "expo-video": "^3.0.0",
     "react": "^18.2.0",
     "react-native": "^0.72.0",
     "react-native-web": "^0.18.0",
-    "react-native-windows": "^0.72.0",
-    "react-native-macos": "^0.72.0",
-    "react-native-tvos": "^0.72.0",
-    "singalong-shared": "workspace:*",
-    "singalong-ui-library": "workspace:*"
+    "singalong-shared": "../shared",
+    "singalong-ui-library": "../ui-library"
   },
   "devDependencies": {
     "typescript": "^5.2.0",

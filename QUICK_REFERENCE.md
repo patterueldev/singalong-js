@@ -3,8 +3,11 @@
 ## Quick Start (Copy & Paste)
 
 ```bash
-# 1. Install dependencies
-npm install
+# 1. Install pnpm (if needed)
+npm install -g pnpm
+
+# 2. Install dependencies
+pnpm install
 
 # 2. Setup environment
 cp .env.example .env
@@ -44,51 +47,51 @@ singalong-js/                  # Monorepo root
 docker-compose up
 
 # Start individual services locally
-cd server && npm run dev       # Server on :3000
-cd admin-app && npm run web    # Admin on :3001
-cd controller-app && npm run web    # Controller on :3002
-cd player-app && npm run web   # Player on :3003
+cd server && pnpm run dev       # Server on :3000
+cd admin-app && pnpm run web    # Admin on :3001
+cd controller-app && pnpm run web    # Controller on :3002
+cd player-app && pnpm run web   # Player on :3003
 
 # Build all workspaces
-npm run build:all
+pnpm run build:all
 
 # Lint all code
-npm run lint
+pnpm run lint
 ```
 
 ### Server Only
 
 ```bash
 cd server
-npm run dev      # Start with hot-reload
-npm run build    # Compile TypeScript
-npm start        # Run compiled JS
+pnpm run dev      # Start with hot-reload
+pnpm run build    # Compile TypeScript
+pnpm start        # Run compiled JS
 ```
 
 ### Admin App
 
 ```bash
 cd admin-app
-npm run web      # Web development
-npm run ios      # iOS simulator
-npm run android  # Android emulator
-npm run build:web # Production web build
+pnpm run web      # Web development
+pnpm run ios      # iOS simulator
+pnpm run android  # Android emulator
+pnpm run build:web # Production web build
 ```
 
 ### Controller App
 
 ```bash
 cd controller-app
-npm run web      # Web development
-npm run build:web # Production build
+pnpm run web      # Web development
+pnpm run build:web # Production build
 ```
 
 ### Player App
 
 ```bash
 cd player-app
-npm run web      # Web development
-npm run build:web # Production build
+pnpm run web      # Web development
+pnpm run build:web # Production build
 ```
 
 ## Environment Variables
@@ -280,7 +283,7 @@ QUICK_REFERENCE.md     # This file
 
 ```bash
 # Full reset
-rm -rf node_modules package-lock.json .env && npm install && cp .env.example .env
+rm -rf node_modules pnpm-lock.yaml .env && pnpm install && cp .env.example .env
 
 # Start everything
 docker-compose up

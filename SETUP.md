@@ -5,7 +5,7 @@ This guide walks you through setting up and running the Singalong karaoke system
 ## Prerequisites
 
 - **Node.js 18+** — Download from https://nodejs.org/
-- **npm** — Comes with Node.js
+- **pnpm 8+** — Install globally with `npm install -g pnpm`
 - **Docker & Docker Compose** (optional, recommended) — Download from https://www.docker.com/
 - **Git** — For version control
 
@@ -20,7 +20,8 @@ cd /Users/pat/Projects/PERSONAL/singalong-js
 ### 2. Install All Dependencies
 
 ```bash
-npm install
+npm install -g pnpm    # Install pnpm globally (first time only)
+pnpm install           # Install all workspace dependencies
 ```
 
 This installs dependencies for:

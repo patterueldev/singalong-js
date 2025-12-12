@@ -1,0 +1,7 @@
+packages:
+  - 'server'
+  - 'admin-app'
+  - 'controller-app'
+  - 'player-app'
+  - 'shared'
+  - 'ui-library'

@@ -441,11 +441,14 @@ docker-compose.yml contains:
 
 ### Local Development Setup
 ```bash
+# Install pnpm (first time only)
+npm install -g pnpm
+
+# Install all dependencies
+pnpm install
+
 # Start all services
 docker-compose up
-
-# Rebuild after code changes
-docker-compose up --build
 
 # Access points:
 # - Server API: http://localhost:3000

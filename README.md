@@ -21,14 +21,18 @@ A decentralized, cross-platform karaoke system where users host their own server
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js 18+ and npm
+- Node.js 18+
+- **pnpm 8+** (install globally: `npm install -g pnpm`)
 - Docker and Docker Compose (optional, for containerized setup)
 
 ### Development Setup
 
 ```bash
-# Install dependencies for all workspaces
-npm install
+# Install pnpm globally (if not already installed)
+npm install -g pnpm
+
+# Install all dependencies for all workspaces
+pnpm install
 
 # Start all services with Docker
 docker-compose up
@@ -225,8 +229,8 @@ npm run android  # Android emulator
 
 ### Run Tests
 ```bash
-npm run test      # Run all tests
-npm run lint      # Lint all workspaces
+pnpm run test      # Run all tests
+pnpm run lint      # Lint all workspaces
 ```
 
 ## 🐳 Docker Services
