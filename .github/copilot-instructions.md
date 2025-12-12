@@ -8,12 +8,68 @@ This project implements a decentralized karaoke system with a local server and m
 - **Server (Node + TypeScript)** — runs locally on user's machine. Each user hosts their own server (NOT cloud-hosted).
 - **Admin App (React Native + Expo)** — runs on web browser, iOS, and Android. Shows current song, queue, reservations, users, approvals.
 - **Controller App (React Native + Expo)** — runs on web browser, iOS, and Android. For regular users with songbook search, reservations, queue status.
+- **Player App (React Native + Expo)** — runs on web browser, iOS, and Android. Displays currently playing video/media and song metadata.
 
-**Key principles:**
-- Server is the source of truth for all state (sessions, queues, playback, reservations).
-- Clients are stateless and derive data from server REST endpoints + WebSocket subscriptions.
-- No cloud dependency; all session data is local to the hosting machine.
-- Media extraction is pluggable via "MediaProvider" interface (supports multiple sources).
+## Infrastructure & Session Model
+
+### Room Lifecycle
+- **Admin creates a room** → generates 6-digit room number + QR code
+- **Admin joins the room** → gains full management access
+- **Admin starts session** (optional during room creation, or anytime after)
+- **Users/Controllers join the room** → enter nickname + optional passcode → see dashboard and songbook
+- **Player app joins** → displays currently playing song (auth managed by admin)
+- **Room ends** → admin closes session, all clients disconnect
+
+### Room Structure
+```ts
+interface Room {
+  id: string;                    // 6-digit room number (e.g., "482916")
+  passcodeProtected: boolean;    // If true, users must enter passcode
+  passcode?: string;             // Only stored on server, never transmitted to clients
+  qrCode: string;                // QR string/data for mobile scanning
+  createdBy: string;             // Admin ID
+  createdAt: number;             // Timestamp
+  sessionStarted: boolean;        // False until admin starts
+  status: "active" | "ended";    // Room active or closed
+}
+
+interface Session {
+  roomId: string;
+  currentSong?: Song;            // Now playing
+  queue: Queue;                  // All queued songs
+  reservations: Reservation[];   // User song requests
+  participants: User[];          // Connected users/admins
+  createdAt: number;
+  startedAt?: number;
+}
+
+interface User {
+  id: string;                    // Server-assigned, unique globally
+  nickname: string;              // Unique globally across all rooms
+  password?: string;             // Optional; if set, user "owns" the nickname
+  role: "admin" | "user";        // Admin vs regular user
+  roomId: string;
+  joinedAt: number;
+  sessionToken?: string;         // For player app auth (TBD)
+  songHistory: string[];         // Track songs sung for future recommendations
+}
+```
+
+### Authentication & Access Control
+
+| App | Auth Type | Details |
+|-----|-----------|---------|
+| **Admin** | Basic auth (username/password) | Required. Admin creates rooms, manages session, controls playback. Credentials stored locally on server. |
+| **Controller (User)** | Nickname + optional user password + optional room passcode | Nickname unique globally. User can optionally set a password to "own" the nickname (default: no password). Room may require passcode. |
+| **Player** | Server-assigned token | Admin provisions player device (TBD how: QR, manual, etc.). No user input. |
+
+**Key Pattern:**
+- Admin auth happens **once per session** — unlocks full room management
+- User join flow: `nickname` (required) → `user password` (if user has one set) → `room passcode` (if room requires it)
+- **Nickname uniqueness:** Global across server; if user has no password, anyone can claim it. If user sets password, only they can use that nickname.
+- **Nickname collision in room:** If another user tries to join with an already-taken nickname (and that user has no password), access is denied until: (1) the original user leaves the room, OR (2) the original user is idle for 10+ minutes (auto-disconnected)
+- **User tracking:** All songs sung by a user are logged for future recommendation engine
+- Player is **one-time setup** — admin authenticates player during room config (mechanism TBD)
 
 ## Project Structure & Conventions
 
@@ -29,6 +85,7 @@ singalong-js/
 │   └── index.ts        # Server entry point
 ├── admin-app/          # React Native + Expo (web, iOS, Android)
 ├── controller-app/     # React Native + Expo (web, iOS, Android)
+├── player-app/         # React Native + Expo (web, iOS, Android) - displays video/media
 ├── shared/             # TypeScript types used across all apps
 └── package.json        # Monorepo root (npm workspaces)
 ```
