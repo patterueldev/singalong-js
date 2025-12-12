@@ -112,6 +112,37 @@ The Player App displays the currently playing song with:
 - **Queue & user state** restored from persistent storage
 - No data loss for active sessions
 
+## Key API Endpoints
+
+### Room Management
+- `POST /rooms` — Create room (admin auth required)
+- `GET /rooms/:roomId` — Get room details
+- `POST /rooms/:roomId/join` — Join room (nickname + optional passcode)
+- `POST /rooms/:roomId/leave` — Leave room
+- `POST /rooms/:roomId/start-session` — Start session (admin only)
+- `POST /rooms/:roomId/end-session` — End session (admin only)
+
+### Queue & Playback
+- `GET /rooms/:roomId/queue` — Get full queue
+- `GET /rooms/:roomId/current-song` — Get now playing
+- `POST /rooms/:roomId/queue` — Add song to queue
+- `PATCH /rooms/:roomId/queue/:queueItemId` — Reorder/edit queue item (admin only)
+- `DELETE /rooms/:roomId/queue/:queueItemId` — Remove from queue
+- `POST /rooms/:roomId/queue/:queueItemId/play` — Play song (admin or owner)
+- `POST /rooms/:roomId/queue/:queueItemId/pause` — Pause song (admin or owner)
+- `POST /rooms/:roomId/queue/:queueItemId/skip` — Skip song (admin or owner)
+
+### Song Database
+- `GET /songs/search?q=...` — Search existing songs
+- `POST /songs` — Add new song to database
+- `PATCH /songs/:songId` — Edit song details (admin only)
+- `DELETE /songs/:songId` — Delete song (admin only)
+
+### User Management
+- `GET /rooms/:roomId/users` — Get users in room (with session stats)
+- `POST /rooms/:roomId/users/:userId/disconnect` — Disconnect user (admin only)
+- `PATCH /users/:userId` — Update user profile (set password, etc.)
+
 ## Database & Persistence
 
 ### Storage Strategy
