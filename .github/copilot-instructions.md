@@ -143,6 +143,90 @@ The Player App displays the currently playing song with:
 - `POST /rooms/:roomId/users/:userId/disconnect` — Disconnect user (admin only)
 - `PATCH /users/:userId` — Update user profile (set password, etc.)
 
+## Song Infrastructure
+
+### Song Model
+```ts
+interface Song {
+  id: string;                    // UUID, PK
+  title: string;
+  artist: string;
+  duration: number;              // milliseconds
+  language: string;              // e.g., "en", "ja", "tl"
+  fileUrl: string;               // Link to downloaded file (S3 or local filesystem)
+  provider: string;              // Source (e.g., "youtube", "spotify")
+  providerId: string;            // ID from external provider
+  lyrics?: string;               // Optional lyrics text
+  tags: string[];                // For indexing/categorization (e.g., ["weeb", "anime", "2000s"])
+  metadata: object;              // JSON blob for provider-specific data
+  createdAt: number;
+  updatedAt: number;
+}
+
+interface ReservedSong {
+  id: string;                    // UUID, PK
+  roomId: string;                // FK to room
+  songId: string;                // FK to Song
+  reservedBy: string;            // User ID
+  status: "pending" | "playing" | "completed" | "cancelled";
+  addedAt: number;
+  startedAt?: number;
+  completedAt?: number;
+}
+```
+
+### Song Discovery Flow
+
+**1. Song Book (Database Search)**
+   - Display all songs in database
+   - Filter/search by title, artist, language, tags
+   - Show if song is already reserved (status, by whom)
+   - Click to reserve → confirm → added to queue
+
+**2. Suggest Song Screen (Media Provider Search)**
+   - User types song query → calls MediaProvider API (YouTube, Spotify, etc.)
+   - Display results with thumbnails
+   - Show if song already exists in database
+   - Show if song already in reservation list
+   - Select song to proceed
+
+**3. Manual URL Entry**
+   - User pastes direct URL (YouTube, etc.)
+   - Validate and fetch metadata via MediaProvider
+
+**4. Enhancements Page**
+   - Song metadata pre-filled from MediaProvider (or OpenAI extraction)
+   - User can manually edit: title, artist, language, lyrics, tags
+   - Preview file before confirming
+   - **Download & Reserve** — adds to database and reserves immediately
+   - **Download Only** — adds to database, user can reserve later
+
+### Room Atmosphere & Recommendations
+```ts
+interface Room {
+  // ... existing fields ...
+  atmosphere?: string;           // Optional: "weeb", "traditional", "pop", etc.
+}
+```
+- Helps recommendation engine suggest relevant songs (e.g., suggest Japanese songs for "weeb" rooms)
+- Can be set by admin during room creation or updated later
+
+### MediaProvider Pattern
+The `MediaProvider` interface abstracts song fetching and metadata extraction:
+```ts
+interface MediaProvider {
+  searchSongs(query: string): Promise<Song[]>;
+  getSongMetadata(id: string): Promise<SongMetadata>;
+  extractMetadata(url: string): Promise<SongMetadata>;  // For manual URL entry
+}
+```
+Implementations (YouTube, Spotify, local files) go in `/server/media/[provider].ts`. Register new providers in `/server/media/registry.ts`.
+
+### File Storage Strategy
+- **Plain filesystem** (preferred): Store downloaded files in `/server/media/files/` or similar
+- **S3-style** (alternative): Abstract behind a storage interface for future cloud migration
+- Use content hashing (SHA256) of URL to avoid re-downloading duplicates
+
 ## Database & Persistence
 
 ### Storage Strategy
