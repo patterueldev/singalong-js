@@ -170,9 +170,11 @@ The Player App displays the currently playing song with:
 
 ### Song Database
 - `GET /songs/search?q=...` — Search existing songs
-- `POST /songs` — Add new song to database
+- `POST /songs/suggest` — Suggest new song from MediaProvider (for admin or user)
 - `PATCH /songs/:songId` — Edit song details (admin only)
 - `DELETE /songs/:songId` — Delete song (admin only)
+
+**Note:** Songs are ONLY added via the Suggestion/Enhancement flow (see User Song Reservation & Queue Flow). Direct POST to `/songs` is not allowed because songs depend heavily on media availability from the MediaProvider. The enhancement flow ensures metadata is verified and media is downloadable before being added to the database.
 
 ### User Management
 - `GET /rooms/:roomId/users` — Get users in room (with session stats)
@@ -512,6 +514,18 @@ Each client app (Admin, Controller, Player) is a **separate React Native + Expo 
 - Server imports from `/shared` for consistent type definitions and serialization
 - Each app has its own services layer for app-specific business logic (API calls, WebSocket subscriptions, etc.)
 
+## Development Guidelines
+- **No global state outside of session/services** — React components should read from server, not local Redux/Context.
+- **Event-driven architecture** — server state changes broadcast via WebSocket; clients listen and re-fetch if needed.
+- **Validate at server layer** — clients trust server data but server validates all user inputs.
+- **Avoid bidirectional sync** — only server→client updates via WebSocket; client→server is explicit REST calls.
+
+## Common Pitfalls to Avoid
+- ❌ Caching client-side user/queue state without server refresh
+- ❌ Modifying session state outside of `/session/manager.ts`
+- ❌ Hardcoding MediaProvider logic instead of using the pluggable interface
+- ❌ Mixing async operations without proper error handling in React useEffect
+
 ### TypeScript & Code Style
 - **Strict mode enabled** in `tsconfig.json` across all workspaces.
 - Domain models (Song, User, Queue, Session) are defined in `/shared/models` and imported by both server and clients.
@@ -612,13 +626,12 @@ admin-app/
    - Volume control + Mute button
    - Player Selection dropdown: assign idle players to this room
 
-   **4.2 Participants List Panel (Bottom-Left)**
-   - List of all users in room with status
-   - Idle detection: users inactive for 10+ minutes marked as "Idle" (auto-disconnect)
-   - Display: nickname, role (admin/user), join time, last activity time
-   - Actions: Kick user (remove from room), Ban user (TBD if needed)
+   **4.2 Downloads Panel (Bottom-Left)**
+   - Show progress of songs being downloaded from MediaProvider
+   - Display: song title, artist, download progress bar with status (pending, downloading, completed, failed)
+   - Can be a collapsible panel or mini popup to not clutter the dashboard
 
-   **4.3 Reservation List Panel (Right Half)**
+   **4.3 Reservation List Panel (Top Right)**
    - Full queue/reservation list with status (pending, playing, completed)
    - Tap song to view details in modal (title, artist, duration, who reserved)
    - Tap to edit song details, reorder queue, or remove song
@@ -627,10 +640,74 @@ admin-app/
      - Create new user by specifying nickname (if doesn't exist)
    - Duplicate song handling: shows notification if song already in queue/played
 
+   **4.4 Participants List Panel (Bottom-Right)**
+   - List of all users in room with status
+   - Idle detection: users inactive for 10+ minutes marked as "Idle" (auto-disconnect)
+   - Display: nickname, role (admin/user), join time, last activity time
+   - Actions: Kick user (remove from room), Ban user (TBD if needed)
+
 **Navigation & Menu**
 - Global menu/header for navigation between screens
 - Logout button
 - Room selection/quick-access if managing multiple rooms
+
+### Controller App: User Song Discovery & Reservation
+
+The Controller App is the user-facing interface for browsing, discovering, and reserving songs.
+
+**Mobile-Only Design** — Optimized for iOS, Android, and web browsers on mobile devices (phones/tablets)
+
+**Main Screens:**
+
+**1. Login Screen**
+- Nickname field (required)
+- Room ID field (required)
+- "Join" button
+
+**2. Secondary Auth Screen** (if needed)
+- User Password field (if user nickname is password-protected)
+- Room Passcode field (if room requires passcode)
+- Single screen for both (one auth call validates both)
+- "Confirm" button
+
+**3. Dashboard Screen**
+- **Now Playing Section:** Current song title, artist, who reserved it
+  - Song details button (view lyrics if available)
+  - Play/Pause/Skip buttons (only if user reserved the current song)
+- **Reservations List:** User's reserved songs with status
+  - Tap to view details modal (read-only, admin cannot edit from here)
+  - Remove button for each song
+- **Floating "Song Book" Button:** Opens song discovery flow
+
+**4. Song Book Screen**
+- Browse all songs in database
+- Search by title, artist, language, tags
+- Recommendation section (based on room atmosphere)
+- "Suggest New Song" button (if song not found)
+
+**5. Suggestion Screen** (MediaProvider Search)
+- Search bar for song query
+- Results list with thumbnails
+- Each item shows: title, artist, duration, indicators ("In Database", "Already Queued", "Already Played")
+- Context menu per item:
+  - "Select Song" → go to Enhancement Screen
+  - "Preview" → open external app (YouTube, etc.)
+
+**6. Manual URL Entry Screen**
+- Text input for direct song URL (YouTube, etc.)
+- "Continue" button (validates and fetches metadata)
+
+**7. Enhancement Screen**
+- Pre-filled metadata from provider (or OpenAI extraction)
+- Editable fields: Title, Artist, Language, Thumbnail, Lyrics
+- "Search for Lyrics" button → opens Google search with title+artist
+- "Download Only" button → adds to database
+- "Download & Reserve" button → adds to database + queue immediately
+
+**Layout Notes:**
+- Single screen optimized for mobile
+- No responsive desktop layout (mobile-only focus)
+- Clear navigation flow: Dashboard → Song Book → Suggestion/URL → Enhancement → Queue
 
 ## Admin App: Single Responsive Codebase
 
