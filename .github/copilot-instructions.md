@@ -46,7 +46,7 @@ interface Session {
 interface User {
   id: string;                    // Server-assigned, unique globally
   nickname: string;              // Unique globally across all rooms
-  password?: string;             // Optional; if set, user "owns" the nickname
+  password?: string;             // Required for admins; optional for regular users
   role: "admin" | "user";        // Admin vs regular user
   roomId: string;
   joinedAt: number;
@@ -59,17 +59,81 @@ interface User {
 
 | App | Auth Type | Details |
 |-----|-----------|---------|
-| **Admin** | Basic auth (username/password) | Required. Admin creates rooms, manages session, controls playback. Credentials stored locally on server. |
-| **Controller (User)** | Nickname + optional user password + optional room passcode | Nickname unique globally. User can optionally set a password to "own" the nickname (default: no password). Room may require passcode. |
+| **Admin** | Basic auth (nickname/password) | Required. Admin creates rooms, manages session, controls playback. Always password-protected (mandatory). |
+| **Controller (User)** | Nickname + optional password (if user is regular) + optional room passcode | Regular users: optional password. Admins must use password when joining via controller (they should use admin app instead). Room may require passcode. |
 | **Player** | Server-assigned token | Admin provisions player device (TBD how: QR, manual, etc.). No user input. |
 
 **Key Pattern:**
-- Admin auth happens **once per session** — unlocks full room management
-- User join flow: `nickname` (required) → `user password` (if user has one set) → `room passcode` (if room requires it)
-- **Nickname uniqueness:** Global across server; if user has no password, anyone can claim it. If user sets password, only they can use that nickname.
-- **Nickname collision in room:** If another user tries to join with an already-taken nickname (and that user has no password), access is denied until: (1) the original user leaves the room, OR (2) the original user is idle for 10+ minutes (auto-disconnected)
+- **Admin role:** Always password-protected. Authenticates via admin app with nickname/password. Can also join controller app but must provide password.
+- User join flow (Controller): `nickname` (required) → `user password` (if user has one set) → `room passcode` (if room requires it)
+- **Nickname uniqueness:** Global across server; admins always password-protected. Regular users with no password can be claimed by anyone.
+- **One nickname per room at a time:** A nickname can only exist in one room simultaneously. If a non-password user tries to join a different room with their current nickname, access is denied until they leave the first room.
+- **Password-protected nickname switching:** If a password-protected user tries to join a different room, their old session is automatically kicked out (useful for switching phones). Non-password users must manually leave first.
+- **Nickname collision in same room:** If another user tries to join the same room with an already-taken nickname (and that user has no password), access is denied until: (1) the original user leaves, OR (2) the original user is idle for 10+ minutes (auto-disconnected)
 - **User tracking:** All songs sung by a user are logged for future recommendation engine
 - Player is **one-time setup** — admin authenticates player during room config (mechanism TBD)
+
+## Database & Persistence
+
+### Storage Strategy
+- **SQLite or PostgreSQL** (TBD) — persistent local/networked storage for rooms, users, sessions
+- **In-memory state** — active queue, current playback, live WebSocket connections (rebuilds on server restart)
+- No migration framework required yet; schema evolution handled via server-side setup scripts
+
+### Core Tables/Collections
+```
+rooms
+  ├── id (UUID, PK)
+  ├── roomNumber (6-digit string, UNIQUE) — user-facing room ID (000000-999999)
+  ├── passcodeProtected (boolean)
+  ├── passcode (encrypted string, nullable)
+  ├── qrCode (string)
+  ├── createdBy (user ID, FK)
+  ├── createdAt (timestamp)
+  ├── sessionStarted (boolean)
+  └── status (enum: "active" | "ended")
+
+users
+  ├── id (UUID, PK)
+  ├── nickname (string, UNIQUE globally)
+  ├── password (hashed string, nullable)
+  ├── role (enum: "admin" | "user")
+  ├── roomId (FK to rooms, nullable — user in room or not)
+  ├── joinedAt (timestamp)
+  ├── lastActivity (timestamp — for idle detection)
+  └── songHistory (array of song IDs)
+
+songs (MediaProvider cache)
+  ├── id (provider-specific ID, PK)
+  ├── title (string)
+  ├── artist (string)
+  ├── duration (milliseconds)
+  ├── provider (enum: "youtube" | "spotify" | etc.)
+  └── metadata (JSON blob)
+
+queue_items
+  ├── id (UUID, PK)
+  ├── roomId (FK)
+  ├── songId (FK)
+  ├── addedBy (user ID, FK)
+  ├── status (enum: "pending" | "playing" | "completed")
+  └── addedAt (timestamp)
+
+reservations (user song requests, future feature)
+  ├── id (UUID, PK)
+  ├── roomId (FK)
+  ├── userId (FK)
+  ├── songId (FK)
+  └── createdAt (timestamp)
+```
+
+### Query Patterns
+- Find active rooms (status = "active")
+- Find user by nickname (global lookup)
+- Find all songs in queue for a room (ordered by addedAt)
+- Find users idle >10 minutes (for auto-disconnect logic)
+- Find user's song history (for recommendations)
+- Check nickname availability in room
 
 ## Project Structure & Conventions
 
