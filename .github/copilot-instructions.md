@@ -8,7 +8,7 @@ This project implements a decentralized karaoke system with a local server and m
 - **Server (Node + TypeScript)** — runs locally on user's machine. Each user hosts their own server (NOT cloud-hosted).
 - **Admin App (React Native + Expo)** — runs on web browser, iOS, and Android. Shows current song, queue, reservations, users, approvals.
 - **Controller App (React Native + Expo)** — runs on web browser, iOS, and Android. For regular users with songbook search, reservations, queue status.
-- **Player App (React Native + Expo)** — runs on web browser, iOS, and Android. Displays currently playing video/media and song metadata.
+- **Player App (React Native + Expo)** — runs on web browser, iOS, iPadOS, Android, tvOS, macOS, and Windows natively. Displays currently playing video/media and song metadata.
 
 ## Infrastructure & Session Model
 
@@ -91,6 +91,42 @@ interface User {
 ### Song Approval Workflow
 Songs are **automatically added to queue** when a user reserves or adds them. No approval step required.
 
+## User Song Reservation & Queue Flow
+
+### Song Reservation Process
+1. **Song Book** — User browses songs in database
+   - Search by title, artist, language, tags
+   - See if song was already played in this room
+   - Option to replay if desired
+   - Click to reserve → added to queue
+
+2. **Suggest Song** — If song not found
+   - User types query → searches MediaProvider API
+   - Results show: title, artist, duration, thumbnail
+   - Indicators: "In Database", "Already in Queue", "Already Played"
+   - Select song to proceed OR try different search
+
+3. **Manual URL Entry** — User pastes direct link
+   - Validate URL with MediaProvider
+   - User can preview video (open in browser tab)
+   - Fetch metadata via MediaProvider
+
+4. **Enhancement Page** — Finalize song metadata
+   - Pre-filled from MediaProvider (or OpenAI extraction)
+   - User can edit: title, artist, language, lyrics, tags
+   - Preview before confirming
+   - Options: **Download Only** (add to DB) or **Download & Reserve** (add to DB + queue)
+
+### Queue Logic
+- **Empty Queue:** New song plays **immediately** (starts playback automatically)
+- **Non-Empty Queue:** Song added to end of queue
+- **User Controls:** Can play/pause/skip/remove **only their own** reserved song
+
+### Duplicate Song Handling
+- If song already in database → reuse existing entry
+- If song already in queue → user prompted "This song is already reserved. Play again?"
+- If song already played in room → user can still reserve (with notification)
+
 ## Player App Features
 
 The Player App displays the currently playing song with:
@@ -142,6 +178,87 @@ The Player App displays the currently playing song with:
 - `GET /rooms/:roomId/users` — Get users in room (with session stats)
 - `POST /rooms/:roomId/users/:userId/disconnect` — Disconnect user (admin only)
 - `PATCH /users/:userId` — Update user profile (set password, etc.)
+
+## Admin Workflow & Room Setup
+
+### Admin Session Flow
+1. **Server Setup** — Admin starts server via Docker
+2. **Access Admin App** — Web browser or native app (iOS/Android)
+3. **Create Room** — Can be created in advance or immediately before session starts
+   - Generates 6-digit room number + QR code
+   - QR code stored (S3 or filesystem)
+   - Room optionally passcode-protected
+   - Room optionally has atmosphere/category for recommendations
+4. **Assign Player(s)** — Select from available idle players
+   - Only idle players (not actively assigned to another room) can be assigned
+   - Multiple players can be assigned to same room
+   - WebSocket tracks player connection status (idle vs. active)
+5. **Start Session** — Admin explicitly starts the session
+   - Players display QR code + room ID for users to scan/enter
+   - Users begin connecting
+6. **Manage During Session** — Admin controls playback, queue, volume
+   - Play/pause/skip any song
+   - Reorder/edit queue
+   - Disconnect misbehaving users
+7. **End Session & Close Room** — Admin ends session
+   - Room must be explicitly closed; cannot be reused until closed
+   - Admin can view list of active rooms anytime
+
+### Player Assignment & Status
+- **Idle State:** Player connected but not assigned to any room
+- **Active State:** Player assigned to room, displaying QR + room ID
+- **WebSocket Events:** Server broadcasts player status changes (idle → active, disconnection)
+- **Hands-Free Design:** Player app has minimal UI; volume control available on Admin or Player UI
+
+### Volume Control
+- **Available On:** Player App, Admin App
+- **Synced Via:** WebSocket (real-time sync across all connected clients)
+- **Not Available On:** Controller App (users don't control volume)
+- **Event:** `volume_changed` broadcast to all clients in room
+
+## Client App UI Specifications
+
+### Player App
+
+**Single Screen Layout**
+
+- **Idle Mode:** Looped background video plays continuously while waiting for room connection
+- **Play Mode:** Full-screen video player displays the current song from the queue
+  - When queue becomes empty, reverts to looped background video
+
+**Layer Structure:**
+
+1. **Player Layer** — Full-screen video playback
+   - Displays current song from queue
+   - Handles video scaling and aspect ratio
+   - Reverts to looped background when queue is empty
+
+2. **Scoring Screen Layer** — Full-screen overlay (when active)
+   - Pops up after song finishes
+   - Displays randomly-generated score (70-100)
+   - Blocks interaction with player layer until dismissed
+   - Future: integrate with real scoring system (details TBD)
+
+3. **UI Overlays** — Always visible on top of active layer
+   - **Top Overlay — Queue Display**
+     - Shows upcoming songs in reservation list
+     - Scrolls right-to-left (traditional videoke style)
+     - Auto-scrolls if width exceeds screen; static if content fits
+     - Displays song title, artist, and who reserved it
+   
+   - **Bottom Overlay — Message Scroll**
+     - Admin broadcasts PSA or messages to all users
+     - Scrolling text (direction TBD)
+     - Future feature; can be enhanced with styling/animations
+   
+   - **Bottom-Left Overlay — QR Code & Room ID**
+     - Displays QR code linking to room
+     - Room ID displayed below QR code (for manual entry)
+     - Semi-transparent to not obstruct video
+
+**Controls (Minimal UI):**
+- Volume control (available via keyboard/remote or Admin App sync)
+- All other controls hidden to maintain immersive display experience
 
 ## Song Infrastructure
 
@@ -381,6 +498,10 @@ Both clients are built with **React Native + Expo + react-native-web**:
 - **React Navigation** for cross-platform routing
 - Responsive layouts adapt automatically: desktop (larger screens), tablet, mobile
 - No separate "web" and "native" versions to maintain
+
+**Player App Specifics:**
+- Also supports **tvOS, macOS and Windows** via React Native for TV/desktop platforms (for TV/display appliances)
+- Can run as a standalone desktop app on consumer PCs/Macs/Apple TVs used as karaoke displays
 
 ### TypeScript & Code Style
 - **Strict mode enabled** in `tsconfig.json` across all workspaces.
