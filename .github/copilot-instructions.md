@@ -150,6 +150,13 @@ The Player App displays the currently playing song with:
 
 ## Key API Endpoints
 
+### Authentication
+- `POST /auth/admin/login` — Admin login (nickname/password) → returns session token
+- `POST /auth/admin/logout` — Admin logout (clears session)
+- `POST /rooms/:roomId/join` — User join room (nickname + optional user password + optional room passcode)
+- `POST /rooms/:roomId/leave` — User leave room
+- `PATCH /users/:userId/password` — User set/update password (to "own" their nickname)
+
 ### Room Management
 - `POST /rooms` — Create room (admin auth required)
 - `GET /rooms/:roomId` — Get room details
@@ -169,12 +176,52 @@ The Player App displays the currently playing song with:
 - `POST /rooms/:roomId/queue/:queueItemId/skip` — Skip song (admin or owner)
 
 ### Song Database
-- `GET /songs/search?q=...` — Search existing songs
-- `POST /songs/suggest` — Suggest new song from MediaProvider (for admin or user)
+- `GET /songs/search?q=...` — Search existing songs in database
+- `GET /songs/search-suggestions?q=...` — Search MediaProvider (YouTube) for song suggestions
+- `POST /songs/suggest` — Submit URL for song suggestion (returns draft with enhanced metadata)
+- `POST /songs/finalize` — Finalize draft, save to database, optionally reserve immediately
+- `DELETE /songs/suggest/:draftId` — Cancel suggestion and delete temporary files
+- `GET /admin/drafts` — View abandoned song drafts (admin only)
 - `PATCH /songs/:songId` — Edit song details (admin only)
 - `DELETE /songs/:songId` — Delete song (admin only)
 
-**Note:** Songs are ONLY added via the Suggestion/Enhancement flow (see User Song Reservation & Queue Flow). Direct POST to `/songs` is not allowed because songs depend heavily on media availability from the MediaProvider. The enhancement flow ensures metadata is verified and media is downloadable before being added to the database.
+**Song Suggestion & Enhancement Flow:**
+- **Suggest** (`POST /songs/suggest`): User submits YouTube URL → server fetches metadata via MediaProvider → OpenAI extracts/enhances details → saves temporary file + draft record → returns draft to client
+- **Finalize** (`POST /songs/finalize`): User confirms/edits metadata → server validates → saves song to database → marks draft as completed → optionally adds to queue
+- **Cancel** (`DELETE /songs/suggest/:draftId`): User cancels before finalization → deletes temporary file → deletes draft record
+- **Admin Drafts** (`GET /admin/drafts`): Lists all abandoned drafts (not finalized within X hours) for cleanup/review
+- **Search Suggestions** (`GET /songs/search-suggestions?q=...`): Uses @distubejs/ytsr to search YouTube. If query doesn't contain karaoke-related terms ("karaoke", "instrumental", "off vocal", etc.), appends "karaoke" to query automatically
+
+**Suggest Endpoint Internal Flow:**
+1. Receive YouTube URL from client
+2. Use MediaProvider (distube/ytdl-core) to download media and extract raw metadata
+3. Pass extracted metadata to OpenAI for intelligent enhancement (infer title, artist, language, etc.)
+4. Save temporary media file to filesystem (with content-hash deduplication)
+5. Create SongDraft record with enhanced metadata
+6. Return draft to client for user review and editing
+
+**Search Suggestions Algorithm:**
+- User enters query (e.g., "Bohemian Rhapsody")
+- Check if query already contains karaoke keywords: "karaoke", "instrumental", "off vocal", "backing track", etc.
+- If NOT found: append " karaoke" to query → search for "Bohemian Rhapsody karaoke"
+- If FOUND: use query as-is → search for exact query
+- Use @distubejs/ytsr to fetch results from YouTube
+- Return list with: title, artist, duration, video URL, thumbnail
+
+**Draft Model:**
+```ts
+interface SongDraft {
+  id: string;                    // UUID, PK
+  createdBy: string;             // User ID who started suggestion
+  roomId: string;                // Room context (if applicable)
+  providerId: string;            // URL/ID from MediaProvider
+  tempFilePath: string;          // Path to temporary downloaded file
+  metadata: Song;                // Draft metadata (editable by user)
+  status: "pending" | "completed" | "cancelled";
+  createdAt: number;
+  expiresAt: number;             // Auto-delete after X hours if not finalized
+}
+```
 
 ### User Management
 - `GET /rooms/:roomId/users` — Get users in room (with session stats)
@@ -434,6 +481,7 @@ rooms
   ├── createdBy (user ID, FK)
   ├── createdAt (timestamp)
   ├── sessionStarted (boolean)
+  ├── vibe (string, nullable) — optional atmosphere/category
   └── status (enum: "active" | "ended")
 
 users
