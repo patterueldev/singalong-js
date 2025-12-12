@@ -258,9 +258,11 @@ The Player App displays the currently playing song with:
      - Room ID displayed below QR code (for manual entry)
      - Semi-transparent to not obstruct video
 
-**Controls (Minimal UI):**
-- Volume control (available via keyboard/remote or Admin App sync)
-- All other controls hidden to maintain immersive display experience
+4. **Player Control Overlay** — Appears on interaction
+   - Triggered by cursor movement (web) or remote button press (TV)
+   - Auto-hides after inactivity
+   - Contains: Play/Pause, Skip, Seek Bar, Volume Control, Mute
+   - Synced with Admin App (volume/mute changes broadcast via WebSocket)
 
 ## Song Infrastructure
 
@@ -510,17 +512,46 @@ Both clients are built with **React Native + Expo + react-native-web**:
 - Domain models (Song, User, Queue, Session) are defined in `/shared/models` and imported by both server and clients.
 - Use explicit typing; avoid `any` except in legacy integration points.
 
-### Real-Time Communication
+## Real-Time Communication
+
 Server emits events to all connected clients via WebSocket:
 ```ts
 {
-  type: "queue_updated" | "song_started" | "song_finished" | "user_joined" | "reservation_added" | "session_ended";
-  payload: {...};  // event-specific data
-  timestamp: number;
+  type: string;       // event type
+  roomId: string;     // room context
+  payload: {...};     // event-specific data
+  timestamp: number;  // server timestamp
 }
 ```
 
-Clients subscribe to events in the `services/websocket.ts` layer (or equivalent).
+### Critical Sync Events
+These events are broadcast to all connected clients in a room and must be kept in sync across Player, Admin, and Controller apps:
+
+1. **Playback Status**
+   - `playback_started` — Song began playing
+   - `playback_paused` — Song paused
+   - `playback_resumed` — Song resumed
+   - Payload: `{ songId, currentTime }`
+
+2. **Seek Position**
+   - `seek_changed` — User seeked to new position (via Player Controls or Admin)
+   - Payload: `{ songId, seekTime }`
+
+3. **Queue Updates**
+   - `queue_updated` — Song added, removed, or reordered
+   - `reservations_list_changed` — Updated list of all reserved songs
+   - Payload: `{ queue: ReservedSong[] }`
+
+4. **Current Song**
+   - `song_changed` — Different song now playing
+   - Payload: `{ songId, title, artist, reservedBy, startTime }`
+
+5. **Volume Control**
+   - `volume_changed` — Volume adjusted (from Player or Admin App)
+   - `mute_toggled` — Mute state changed
+   - Payload: `{ volume: number (0-100), isMuted: boolean }`
+
+Clients subscribe to these events and update their UI accordingly. Admin App changes (e.g., skip, volume) are sent to server, which broadcasts to all clients for consistency.
 
 ## Admin App: Single Responsive Codebase
 
