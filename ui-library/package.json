@@ -4,6 +4,7 @@
   "description": "Shared React Native UI components for Singalong",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "react-native": "src/index.ts",
   "scripts": {
     "build": "tsc",
     "test": "jest",

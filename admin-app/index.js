@@ -1,10 +1,4 @@
-import React from "react";
-import { View } from "react-native";
+import { registerRootComponent } from "expo";
+import App from "./App";
 
-export default function App() {
-  return (
-    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-      {/* TODO: Implement admin app navigation and screens */}
-    </View>
-  );
-}
+registerRootComponent(App);
