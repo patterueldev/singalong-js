@@ -6,8 +6,8 @@ This project implements a decentralized karaoke system with a local server and m
 
 **The system consists of:**
 - **Server (Node + TypeScript)** — runs locally on user's machine. Each user hosts their own server (NOT cloud-hosted).
-- **Admin App (React / React Native Web)** — tablet/desktop UI showing current song, queue, reservations, users, approvals.
-- **Controller App (React Native)** — mobile app for regular users with songbook search, reservations, queue status.
+- **Admin App (React Native + Expo)** — runs on web browser, iOS, and Android. Shows current song, queue, reservations, users, approvals.
+- **Controller App (React Native + Expo)** — runs on web browser, iOS, and Android. For regular users with songbook search, reservations, queue status.
 
 **Key principles:**
 - Server is the source of truth for all state (sessions, queues, playback, reservations).
@@ -27,11 +27,19 @@ singalong-js/
 │   ├── media/          # MediaProvider implementations
 │   ├── session/        # Session manager, queue handler, event dispatcher
 │   └── index.ts        # Server entry point
-├── admin-app/          # React web app (tablet/desktop)
-├── controller-app/     # React Native app
+├── admin-app/          # React Native + Expo (web, iOS, Android)
+├── controller-app/     # React Native + Expo (web, iOS, Android)
 ├── shared/             # TypeScript types used across all apps
 └── package.json        # Monorepo root (npm workspaces)
 ```
+
+### Cross-Platform Client Architecture
+Both clients are built with **React Native + Expo + react-native-web**:
+- **Single codebase** runs on web browsers, iOS, and Android
+- Use `react-native-web` for browser rendering, native modules for iOS/Android
+- **React Navigation** for cross-platform routing
+- Responsive layouts adapt automatically: desktop (larger screens), tablet, mobile
+- No separate "web" and "native" versions to maintain
 
 ### TypeScript & Code Style
 - **Strict mode enabled** in `tsconfig.json` across all workspaces.
