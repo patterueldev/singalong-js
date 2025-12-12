@@ -244,7 +244,9 @@ The Player App displays the currently playing song with:
      - Shows upcoming songs in reservation list
      - Scrolls right-to-left (traditional videoke style)
      - Auto-scrolls if width exceeds screen; static if content fits
-     - Displays song title, artist, and who reserved it
+     - **First item (leftmost):** Currently playing song with 🎤 emoji indicator
+     - **Following items:** Reserved songs in queue order
+     - Each displays: song title, artist, nickname of who reserved it
    
    - **Bottom Overlay — Message Scroll**
      - Admin broadcasts PSA or messages to all users
