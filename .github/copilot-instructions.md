@@ -73,6 +73,45 @@ interface User {
 - **User tracking:** All songs sung by a user are logged for future recommendation engine
 - Player is **one-time setup** — admin authenticates player during room config (mechanism TBD)
 
+## Permissions & Song Management
+
+### User Actions
+- **View:** Current song, queue, own reservations
+- **Playback control:** Play/pause/skip **only their own** reserved or currently singing song
+- **Queue management:** Cancel their own reserved songs ahead of time
+- **Song selection:** Reserve existing songs from the database; add new songs not yet in database
+
+### Admin Actions
+- **All user actions:** Admins can perform everything regular users can do
+- **Playback control:** Play/pause/skip **any song** currently playing (not just their own)
+- **Queue management:** Cancel, reorder, or edit any song in the queue
+- **Song management:** Edit song details; delete songs from database
+- **User management:** Disconnect users from room; manage session state
+
+### Song Approval Workflow
+Songs are **automatically added to queue** when a user reserves or adds them. No approval step required.
+
+## Player App Features
+
+The Player App displays the currently playing song with:
+- **Now Playing:** Video/media playback from MediaProvider
+- **Score Display:** Show current singer's score (if applicable)
+- **Scrolling Reservation List:** Floating overlay showing upcoming songs (right-to-left scroll, like traditional videoke)
+- **User Session Stats:** List of all users currently in session with song count sung in this room/session
+- **QR Code & Room ID:** Display QR code linking to room (can auto-fill room ID in Controller or require manual entry, TBD)
+
+## Server Behavior & Scalability
+
+### Room Capacity
+- **Unlimited concurrent users** per room (practically, no hard limit enforced; assume <10K per room)
+
+### Server Restart & State Recovery
+- **Active rooms reload from database** on server startup
+- **Playback resumes** from the current song state (with adjusted timestamps)
+- **WebSocket connections re-establish** as clients reconnect
+- **Queue & user state** restored from persistent storage
+- No data loss for active sessions
+
 ## Database & Persistence
 
 ### Storage Strategy
