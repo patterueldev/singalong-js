@@ -490,22 +490,27 @@ singalong-js/
 │   └── index.ts        # Server entry point
 ├── admin-app/          # React Native + Expo (web, iOS, Android)
 ├── controller-app/     # React Native + Expo (web, iOS, Android)
-├── player-app/         # React Native + Expo (web, iOS, Android) - displays video/media
+├── player-app/         # React Native + Expo (web, iOS, Android, tvOS, macOS, Windows)
 ├── shared/             # TypeScript types used across all apps
+├── ui-library/         # Shared React Native components (buttons, modals, inputs, etc.)
 └── package.json        # Monorepo root (npm workspaces)
 ```
 
 ### Cross-Platform Client Architecture
-Both clients are built with **React Native + Expo + react-native-web**:
-- **Single codebase** runs on web browsers, iOS, and Android
-- Use `react-native-web` for browser rendering, native modules for iOS/Android
+Each client app (Admin, Controller, Player) is a **separate React Native + Expo project**:
+- Individual `package.json` with own dependencies
+- Separate Expo build configurations
+- Can be deployed/updated independently
+- All three use `react-native-web` for browser rendering, native modules for iOS/Android
 - **React Navigation** for cross-platform routing
-- Responsive layouts adapt automatically: desktop (larger screens), tablet, mobile
-- No separate "web" and "native" versions to maintain
+- Share common types from `/shared` and UI components from `/ui-library`
 
-**Player App Specifics:**
-- Also supports **tvOS, macOS and Windows** via React Native for TV/desktop platforms (for TV/display appliances)
-- Can run as a standalone desktop app on consumer PCs/Macs/Apple TVs used as karaoke displays
+**Shared Resources:**
+- `/shared` — TypeScript interfaces (Song, User, Queue, etc.) imported by all apps
+- `/shared/services` — Shared utility functions (e.g., filtering reservations, formatting metadata, API response handling)
+- `/ui-library` — Reusable React Native components (buttons, modals, search bars, etc.) imported by all apps
+- Server imports from `/shared` for consistent type definitions and serialization
+- Each app has its own services layer for app-specific business logic (API calls, WebSocket subscriptions, etc.)
 
 ### TypeScript & Code Style
 - **Strict mode enabled** in `tsconfig.json` across all workspaces.
@@ -607,7 +612,13 @@ admin-app/
    - Volume control + Mute button
    - Player Selection dropdown: assign idle players to this room
 
-   **4.2 Reservation List Panel (Right Half)**
+   **4.2 Participants List Panel (Bottom-Left)**
+   - List of all users in room with status
+   - Idle detection: users inactive for 10+ minutes marked as "Idle" (auto-disconnect)
+   - Display: nickname, role (admin/user), join time, last activity time
+   - Actions: Kick user (remove from room), Ban user (TBD if needed)
+
+   **4.3 Reservation List Panel (Right Half)**
    - Full queue/reservation list with status (pending, playing, completed)
    - Tap song to view details in modal (title, artist, duration, who reserved)
    - Tap to edit song details, reorder queue, or remove song
@@ -615,12 +626,6 @@ admin-app/
      - Choose existing user by nickname OR
      - Create new user by specifying nickname (if doesn't exist)
    - Duplicate song handling: shows notification if song already in queue/played
-
-   **4.3 Participants List Panel (Bottom-Left)**
-   - List of all users in room with status
-   - Idle detection: users inactive for 10+ minutes marked as "Idle" (auto-disconnect)
-   - Display: nickname, role (admin/user), join time, last activity time
-   - Actions: Kick user (remove from room), Ban user (TBD if needed)
 
 **Navigation & Menu**
 - Global menu/header for navigation between screens
