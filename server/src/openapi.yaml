@@ -1,0 +1,1027 @@
+openapi: 3.0.3
+info:
+  title: Singalong Karaoke API
+  description: |
+    Decentralized karaoke system API where users host their own servers locally.
+    
+    ## Authentication
+    Most endpoints require authentication via Bearer token in the Authorization header:
+    ```
+    Authorization: Bearer <session_token>
+    ```
+    
+    ## Room Lifecycle
+    1. Admin creates room (generates 6-digit room number + QR code)
+    2. Admin starts session → players display QR code → users join via Controller
+    3. All clients sync via WebSocket; server is source of truth
+    4. Room ends when admin closes it
+    
+  version: 0.1.0
+  contact:
+    name: Singalong API Support
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+  - url: http://server:3000
+    description: Docker network server
+
+tags:
+  - name: Health
+    description: Server health and status endpoints
+  - name: Authentication
+    description: Admin and user authentication
+  - name: Rooms
+    description: Room management and session control
+  - name: Queue
+    description: Song queue operations
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Session token obtained from login or join-room endpoints
+  
+  schemas:
+    Error:
+      type: object
+      required:
+        - success
+        - error
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          example: "Error message"
+    
+    User:
+      type: object
+      required:
+        - id
+        - nickname
+        - role
+      properties:
+        id:
+          type: string
+          example: "693c38fe6cab516b273e2a33"
+        nickname:
+          type: string
+          example: "john_doe"
+        role:
+          type: string
+          enum: [admin, user]
+          example: "user"
+        roomId:
+          type: string
+          example: "693c38fe6cab516b273e2a34"
+        joinedAt:
+          type: number
+          format: int64
+          example: 1765554430594
+    
+    Room:
+      type: object
+      required:
+        - id
+        - roomNumber
+        - passcodeProtected
+        - qrCode
+        - createdBy
+        - createdAt
+        - sessionStarted
+        - status
+      properties:
+        id:
+          type: string
+          example: "693c38fe6cab516b273e2a34"
+        roomNumber:
+          type: string
+          pattern: '^\d{6}$'
+          example: "161031"
+          description: 6-digit room number (000000-999999)
+        passcodeProtected:
+          type: boolean
+          example: false
+        qrCode:
+          type: string
+          example: "http://localhost:3000/join/161031"
+          description: QR code URL for mobile scanning
+        createdBy:
+          type: string
+          example: "693c38fe6cab516b273e2a33"
+        createdAt:
+          type: number
+          format: int64
+          example: 1765554430590
+        sessionStarted:
+          type: boolean
+          example: false
+        status:
+          type: string
+          enum: [active, ended]
+          example: "active"
+        atmosphere:
+          type: string
+          example: "weeb"
+          description: Optional room atmosphere for recommendations
+    
+    Song:
+      type: object
+      required:
+        - id
+        - title
+        - artist
+        - duration
+        - language
+        - fileUrl
+        - provider
+        - providerId
+        - tags
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          example: "693c38fe6cab516b273e2a35"
+        title:
+          type: string
+          example: "My Way"
+        artist:
+          type: string
+          example: "Frank Sinatra"
+        duration:
+          type: number
+          format: int64
+          description: Duration in milliseconds
+          example: 270000
+        language:
+          type: string
+          example: "en"
+          description: Language code (en, ja, tl, etc.)
+        fileUrl:
+          type: string
+          example: "http://minio:9000/songs/youtube-abc123/song.mp4"
+        provider:
+          type: string
+          example: "youtube"
+          description: Source provider (youtube, spotify, local)
+        providerId:
+          type: string
+          example: "dQw4w9WgXcQ"
+        lyrics:
+          type: string
+          description: Optional full lyrics text
+        tags:
+          type: array
+          items:
+            type: string
+          example: ["classic", "1960s", "ballad"]
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Provider-specific metadata
+        createdAt:
+          type: number
+          format: int64
+          example: 1765554430590
+        updatedAt:
+          type: number
+          format: int64
+          example: 1765554430590
+    
+    ReservedSong:
+      type: object
+      required:
+        - id
+        - roomId
+        - songId
+        - reservedBy
+        - status
+        - addedAt
+      properties:
+        id:
+          type: string
+          example: "693c38fe6cab516b273e2a36"
+        roomId:
+          type: string
+          example: "693c38fe6cab516b273e2a34"
+        songId:
+          type: string
+          example: "693c38fe6cab516b273e2a35"
+        reservedBy:
+          type: string
+          example: "693c38fe6cab516b273e2a33"
+        status:
+          type: string
+          enum: [pending, playing, completed, cancelled]
+          example: "pending"
+        addedAt:
+          type: number
+          format: int64
+          example: 1765554430590
+        startedAt:
+          type: number
+          format: int64
+          example: 1765554450590
+        completedAt:
+          type: number
+          format: int64
+          example: 1765554720590
+        currentTime:
+          type: number
+          format: int64
+          description: Current playback position in milliseconds
+          example: 45000
+    
+    Session:
+      type: object
+      required:
+        - roomId
+        - queue
+        - participants
+        - createdAt
+      properties:
+        roomId:
+          type: string
+          example: "693c38fe6cab516b273e2a34"
+        currentSong:
+          $ref: '#/components/schemas/ReservedSong'
+        queue:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReservedSong'
+        participants:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        createdAt:
+          type: number
+          format: int64
+          example: 1765554430590
+        startedAt:
+          type: number
+          format: int64
+          example: 1765554450590
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Check if the server is running
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  timestamp:
+                    type: number
+                    format: int64
+                    example: 1765554419959
+
+  /auth/admin-login:
+    post:
+      tags:
+        - Authentication
+      summary: Admin login
+      description: Authenticate as an admin user with nickname and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - nickname
+                - password
+              properties:
+                nickname:
+                  type: string
+                  example: "admin"
+                password:
+                  type: string
+                  format: password
+                  example: "P@ssw0rd!"
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      sessionToken:
+                        type: string
+                        example: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+                      userId:
+                        type: string
+                        example: "693c38fe6cab516b273e2a33"
+                      user:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          nickname:
+                            type: string
+                          role:
+                            type: string
+                            enum: [admin]
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/join-room:
+    post:
+      tags:
+        - Authentication
+      summary: Join room as user
+      description: Join a room with nickname, optionally with password and room passcode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - nickname
+                - roomNumber
+              properties:
+                nickname:
+                  type: string
+                  example: "john_doe"
+                roomNumber:
+                  type: string
+                  pattern: '^\d{6}$'
+                  example: "161031"
+                password:
+                  type: string
+                  format: password
+                  description: Optional user password if nickname is protected
+                roomPasscode:
+                  type: string
+                  format: password
+                  description: Required if room is passcode protected
+      responses:
+        '200':
+          description: Successfully joined room
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      sessionToken:
+                        type: string
+                      userId:
+                        type: string
+                      user:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          nickname:
+                            type: string
+                          role:
+                            type: string
+                          roomId:
+                            type: string
+        '400':
+          description: Invalid request or room not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: Logout
+      description: Invalidate current session token
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+
+  /rooms:
+    post:
+      tags:
+        - Rooms
+      summary: Create room
+      description: Create a new room with admin credentials
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - adminNickname
+                - adminPassword
+              properties:
+                adminNickname:
+                  type: string
+                  example: "admin"
+                adminPassword:
+                  type: string
+                  format: password
+                  example: "P@ssw0rd!"
+                roomPasscode:
+                  type: string
+                  format: password
+                  description: Optional passcode to protect room access
+      responses:
+        '200':
+          description: Room created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      room:
+                        $ref: '#/components/schemas/Room'
+                      admin:
+                        $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    
+    get:
+      tags:
+        - Rooms
+      summary: List all active rooms
+      description: Get list of all active rooms (admin only)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of active rooms
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      rooms:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Room'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /rooms/{roomId}:
+    get:
+      tags:
+        - Rooms
+      summary: Get room by ID
+      description: Get room details by room ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "693c38fe6cab516b273e2a34"
+      responses:
+        '200':
+          description: Room details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      room:
+                        $ref: '#/components/schemas/Room'
+        '404':
+          description: Room not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /rooms/by-number/{roomNumber}:
+    get:
+      tags:
+        - Rooms
+      summary: Get room by room number
+      description: Get room details by 6-digit room number
+      parameters:
+        - name: roomNumber
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{6}$'
+          example: "161031"
+      responses:
+        '200':
+          description: Room details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      room:
+                        type: object
+                        description: Room object without sensitive fields like passcode
+        '404':
+          description: Room not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /rooms/{roomId}/start-session:
+    post:
+      tags:
+        - Rooms
+      summary: Start session
+      description: Start the karaoke session for a room (admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "693c38fe6cab516b273e2a34"
+      responses:
+        '200':
+          description: Session started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      started:
+                        type: boolean
+                        example: true
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Only room creator can start session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /rooms/{roomId}/end:
+    post:
+      tags:
+        - Rooms
+      summary: End room
+      description: End the room and close the session (admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "693c38fe6cab516b273e2a34"
+      responses:
+        '200':
+          description: Room ended
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      ended:
+                        type: boolean
+                        example: true
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Only room creator can end room
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /rooms/{roomId}/session:
+    get:
+      tags:
+        - Rooms
+      summary: Get session state
+      description: Get current session state including queue and participants
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "693c38fe6cab516b273e2a34"
+      responses:
+        '200':
+          description: Session state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      session:
+                        $ref: '#/components/schemas/Session'
+        '404':
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /queue/{roomId}/add:
+    post:
+      tags:
+        - Queue
+      summary: Add song to queue
+      description: Add a song to the room's queue
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "693c38fe6cab516b273e2a34"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - songId
+              properties:
+                songId:
+                  type: string
+                  example: "693c38fe6cab516b273e2a35"
+      responses:
+        '200':
+          description: Song added to queue
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      queueItem:
+                        $ref: '#/components/schemas/ReservedSong'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /queue/{roomId}:
+    get:
+      tags:
+        - Queue
+      summary: Get queue
+      description: Get all pending and playing songs in the queue
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "693c38fe6cab516b273e2a34"
+      responses:
+        '200':
+          description: Queue list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      queue:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ReservedSong'
+
+  /queue/{roomId}/play-pause:
+    post:
+      tags:
+        - Queue
+      summary: Play/pause song
+      description: Toggle play/pause for a song in the queue (user can only control their own songs, admins can control any)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "693c38fe6cab516b273e2a34"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - queueItemId
+              properties:
+                queueItemId:
+                  type: string
+                  example: "693c38fe6cab516b273e2a36"
+      responses:
+        '200':
+          description: Playback toggled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      queueItem:
+                        $ref: '#/components/schemas/ReservedSong'
+        '400':
+          description: Invalid request or permission denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /queue/{roomId}/skip:
+    post:
+      tags:
+        - Queue
+      summary: Skip song
+      description: Skip the current song and move to next in queue (user can only skip their own songs, admins can skip any)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "693c38fe6cab516b273e2a34"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - queueItemId
+              properties:
+                queueItemId:
+                  type: string
+                  example: "693c38fe6cab516b273e2a36"
+      responses:
+        '200':
+          description: Song skipped
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      skipped:
+                        type: boolean
+                        example: true
+        '400':
+          description: Invalid request or permission denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /queue/{roomId}/cancel:
+    post:
+      tags:
+        - Queue
+      summary: Cancel song
+      description: Cancel a pending song (cannot cancel currently playing song, use skip instead)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "693c38fe6cab516b273e2a34"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - queueItemId
+              properties:
+                queueItemId:
+                  type: string
+                  example: "693c38fe6cab516b273e2a36"
+      responses:
+        '200':
+          description: Song cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      cancelled:
+                        type: boolean
+                        example: true
+        '400':
+          description: Invalid request or cannot cancel playing song
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /queue/{roomId}/seek:
+    post:
+      tags:
+        - Queue
+      summary: Update playback position
+      description: Update the current playback position (seek) for a song
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "693c38fe6cab516b273e2a34"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - queueItemId
+                - currentTime
+              properties:
+                queueItemId:
+                  type: string
+                  example: "693c38fe6cab516b273e2a36"
+                currentTime:
+                  type: number
+                  format: int64
+                  description: Current playback position in milliseconds
+                  example: 45000
+      responses:
+        '200':
+          description: Seek position updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      updated:
+                        type: boolean
+                        example: true
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'

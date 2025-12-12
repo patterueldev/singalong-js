@@ -12,6 +12,19 @@ node_modules/
 /.next
 /out
 
+# TypeScript compiled output (ignore all generated files)
+*.js
+*.js.map
+*.d.ts
+*.d.ts.map
+# But keep entry point files for Expo apps
+!admin-app/index.js
+!controller-app/index.js
+!player-app/index.js
+# And keep config files
+!*.config.js
+!.*.js
+
 # Misc
 .DS_Store
 *.pem

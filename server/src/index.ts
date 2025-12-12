@@ -3,6 +3,9 @@ import cors from "cors";
 import { WebSocketServer } from "ws";
 import http from "http";
 import dotenv from "dotenv";
+import swaggerUi from "swagger-ui-express";
+import YAML from "yamljs";
+import path from "path";
 
 // Load environment variables
 dotenv.config();
@@ -38,6 +41,15 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Load OpenAPI spec
+const openApiSpec = YAML.load(path.join(__dirname, "openapi.yaml"));
+
+// Swagger UI
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openApiSpec, {
+  customCss: ".swagger-ui .topbar { display: none }",
+  customSiteTitle: "Singalong Karaoke API Documentation",
+}));
 
 // Health check endpoint
 app.get("/health", (req, res) => {
