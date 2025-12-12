@@ -227,6 +227,72 @@ Implementations (YouTube, Spotify, local files) go in `/server/media/[provider].
 - **S3-style** (alternative): Abstract behind a storage interface for future cloud migration
 - Use content hashing (SHA256) of URL to avoid re-downloading duplicates
 
+## Docker & Infrastructure
+
+### Services Architecture
+```yaml
+docker-compose.yml contains:
+- server          # Node.js backend (Express/Hono)
+- admin-app       # React Native Expo (web browser)
+- controller-app  # React Native Expo (web browser)
+- mongodb         # Primary database
+- minio           # S3-compatible object storage for song files
+- cloudflared     # Tunnel for remote access (optional)
+```
+
+### Service Details
+
+**Server**
+- Port: `3000` (REST API)
+- Depends on: MongoDB, MinIO
+- Volumes: Song cache, logs
+- Environment: DB connection, MinIO credentials, MediaProvider keys
+
+**Admin & Controller Apps**
+- Ports: `3001` (admin), `3002` (controller) — dev/built server
+- Depends on: Server (network connectivity)
+- Serves web UI via Expo bundler or production build
+
+**MongoDB**
+- Port: `27017`
+- Volume: `/data/db` (persistent storage)
+- Initialization: Auto-create indexes on startup
+
+**MinIO**
+- Port: `9000` (API), `9001` (console)
+- Volume: `/data` (persistent object storage)
+- Credentials: Set via environment variables
+- Use for: Song file storage (S3-compatible API)
+
+**Cloudflared** (Optional)
+- Exposes server publicly via secure tunnel
+- No direct port exposure
+- Useful for: Remote room access, testing on real devices
+
+### Local Development Setup
+```bash
+# Start all services
+docker-compose up
+
+# Rebuild after code changes
+docker-compose up --build
+
+# Access points:
+# - Server API: http://localhost:3000
+# - Admin app: http://localhost:3001
+# - Controller app: http://localhost:3002
+# - MinIO console: http://localhost:9001
+# - MongoDB: mongodb://localhost:27017
+```
+
+### Environment Variables
+Server needs:
+- `MONGODB_URI` — connection string to MongoDB
+- `MINIO_ENDPOINT` — MinIO API endpoint
+- `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` — MinIO credentials
+- `MEDIA_PROVIDER_API_KEY` — YouTube Data API key (if using YouTube provider)
+- `OPENAI_API_KEY` — for song metadata extraction (optional)
+
 ## Database & Persistence
 
 ### Storage Strategy
