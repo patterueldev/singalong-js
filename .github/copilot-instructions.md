@@ -562,6 +562,80 @@ The Admin App uses **one React codebase** that adapts to different screen sizes:
 **Structure:**
 ```
 admin-app/
+├── screens/        # Individual screens (Login, RoomsManagement, SongsManagement, RoomDashboard, etc.)
+├── layouts/
+│   ├── DesktopLayout.tsx    # Multi-column grid, shows all panels
+│   ├── MobileLayout.tsx     # Tabbed interface, one screen at a time
+│   └── RootLayout.tsx       # Detects viewport and chooses layout
+├── hooks/
+│   └── useResponsive.ts     # Detects mobile/desktop based on viewport
+└── components/
+    └── ScreenCard.tsx       # Wraps each screen (handles borders, scrolling)
+```
+
+**Key Pattern:**
+- Use a single responsive hook (`useResponsive()`) that returns `isMobile: boolean`
+- All screens share the same data/WebSocket subscriptions — no duplication
+- Layout composition changes based on screen size, not separate apps
+- Tabbed navigation on mobile can use React Router params or a context-based tab state
+
+### Admin App Screens
+
+**1. Login Screen**
+- Username/password login for admin
+- Initial seed: username `admin`, password `P@ssw0rd!` (configurable later)
+
+**2. Rooms Management Screen**
+- List of all rooms (active and closed)
+- Create new room (with optional passcode, atmosphere/category)
+- View/edit room details
+- Close room (no delete; records preserved for audit trail)
+
+**3. Songs Management Screen**
+- Browse songs in database
+- Search by title, artist, language, tags
+- Add new songs (using admin version of suggestion flow)
+- Edit song details (title, artist, language, lyrics, tags)
+- Delete songs (admin capability)
+
+**4. Room Dashboard Screen (3-Panel Layout)**
+
+   **4.1 Player Controls Panel (Top-Left)**
+   - Currently playing song: title, artist, who reserved it
+   - Playback controls: Play, Pause, Skip
+   - Seek bar with current time / total duration
+   - Volume control + Mute button
+   - Player Selection dropdown: assign idle players to this room
+
+   **4.2 Reservation List Panel (Right Half)**
+   - Full queue/reservation list with status (pending, playing, completed)
+   - Tap song to view details in modal (title, artist, duration, who reserved)
+   - Tap to edit song details, reorder queue, or remove song
+   - Admin can reserve songs for other users:
+     - Choose existing user by nickname OR
+     - Create new user by specifying nickname (if doesn't exist)
+   - Duplicate song handling: shows notification if song already in queue/played
+
+   **4.3 Participants List Panel (Bottom-Left)**
+   - List of all users in room with status
+   - Idle detection: users inactive for 10+ minutes marked as "Idle" (auto-disconnect)
+   - Display: nickname, role (admin/user), join time, last activity time
+   - Actions: Kick user (remove from room), Ban user (TBD if needed)
+
+**Navigation & Menu**
+- Global menu/header for navigation between screens
+- Logout button
+- Room selection/quick-access if managing multiple rooms
+
+## Admin App: Single Responsive Codebase
+
+The Admin App uses **one React codebase** that adapts to different screen sizes:
+- **Desktop (≥768px)**: Multi-panel grid layout with multiple screens visible simultaneously (Queue, Users, Reservations, etc.)
+- **Mobile (<768px)**: Tab-based navigation with one screen at a time
+
+**Structure:**
+```
+admin-app/
 ├── screens/        # Individual screens (Queue, Users, Reservations, Approvals, etc.)
 ├── layouts/
 │   ├── DesktopLayout.tsx    # Multi-column grid, shows all panels
