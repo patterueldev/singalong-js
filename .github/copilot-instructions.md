@@ -2,6 +2,25 @@
 
 **Decentralized karaoke system** where users host their own servers locally. Built with Node.js (Express), React Native (Expo), TypeScript, MongoDB, and MinIO.
 
+## ⚠️ CRITICAL: Package Manager
+
+**ALWAYS USE `pnpm` - NEVER USE `npm` or `yarn`**
+
+This is a monorepo managed with pnpm workspaces. All commands MUST use `pnpm`:
+- ✅ `pnpm install`
+- ✅ `pnpm run dev`
+- ✅ `pnpm run build`
+- ✅ `pnpm run test`
+- ✅ `pnpm add <package>` (in specific workspace)
+- ❌ NEVER: `npm install`, `npm run`, etc.
+
+To run commands in specific workspaces:
+```bash
+pnpm --filter server run dev          # Run dev in server workspace
+pnpm --filter admin-app run start     # Run start in admin-app workspace
+pnpm run dev --workspace server       # Alternative syntax
+```
+
 ## Quick Start for Agents
 
 ### Architecture at a Glance
@@ -24,11 +43,11 @@ Server (Node.js + Express + WebSocket)
 
 ### Commands
 ```bash
-pnpm install              # Install all dependencies
-docker-compose up         # Start all services (server: 3000, admin: 3001, controller: 3002, player: 3003)
-npm run dev --workspaces  # Start dev servers (if configured in package.json)
-npm run build --workspaces
-npm run test --workspaces
+pnpm install                    # Install all dependencies
+docker-compose up               # Start all services (server: 3000, admin: 3001, controller: 3002, player: 3003)
+pnpm run dev --workspace server # Start server in dev mode
+pnpm run build --workspaces     # Build all workspaces
+pnpm run test --workspaces      # Test all workspaces
 ```
 
 ### Critical Design Patterns

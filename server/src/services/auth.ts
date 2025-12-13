@@ -1,4 +1,4 @@
-import { User } from "singalong-shared";
+import { User, UserRole } from "singalong-shared";
 import { UserRepository, RoomRepository } from "../db/repositories";
 import { hashPassword, comparePassword, generateSessionToken } from "../utils/auth";
 
@@ -18,7 +18,7 @@ export class AuthService {
       throw new Error("Invalid credentials");
     }
 
-    if (user.role !== "admin") {
+    if (user.role !== UserRole.ADMIN) {
       throw new Error("Not an admin user");
     }
 
@@ -100,7 +100,7 @@ export class AuthService {
       user = await this.userRepo.create({
         nickname,
         passwordHash,
-        role: "user",
+        role: UserRole.USER,
         roomId: room.id,
         joinedAt: Date.now(),
         lastActivity: Date.now(),

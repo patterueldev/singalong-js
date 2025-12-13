@@ -1,5 +1,8 @@
+name: singalong-dev
+
 services:
   server:
+    container_name: singalong-dev-server
     build:
       context: .
       dockerfile: server/Dockerfile
@@ -13,16 +16,20 @@ services:
       - MEDIA_PROVIDER_API_KEY=${MEDIA_PROVIDER_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - NODE_ENV=development
+      - DEFAULT_ADMIN_USERNAME=${DEFAULT_ADMIN_USERNAME:-admin}
+      - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-P@ssw0rd!}
     depends_on:
       - mongodb
       - minio
     volumes:
-      - ./server:/app/server
+      - ./server/src:/app/server/src
       - /app/server/node_modules
+      - /app/server/dist
     networks:
-      - singalong-network
+      - singalong-dev-network
 
   admin-app:
+    container_name: singalong-dev-admin-app
     build:
       context: .
       dockerfile: admin-app/Dockerfile
@@ -36,9 +43,10 @@ services:
       - ./admin-app:/app/admin-app
       - /app/admin-app/node_modules
     networks:
-      - singalong-network
+      - singalong-dev-network
 
   controller-app:
+    container_name: singalong-dev-controller-app
     build:
       context: .
       dockerfile: controller-app/Dockerfile
@@ -52,9 +60,10 @@ services:
       - ./controller-app:/app/controller-app
       - /app/controller-app/node_modules
     networks:
-      - singalong-network
+      - singalong-dev-network
 
   player-app:
+    container_name: singalong-dev-player-app
     build:
       context: .
       dockerfile: player-app/Dockerfile
@@ -68,9 +77,10 @@ services:
       - ./player-app:/app/player-app
       - /app/player-app/node_modules
     networks:
-      - singalong-network
+      - singalong-dev-network
 
   mongodb:
+    container_name: singalong-dev-mongodb
     image: mongo:7.0
     ports:
       - "27017:27017"
@@ -78,16 +88,32 @@ services:
       - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USERNAME:-admin}
       - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD:-admin}
     volumes:
-      - mongodb_data:/data/db
+      - mongodb-dev-data:/data/db
     networks:
-      - singalong-network
+      - singalong-dev-network
     healthcheck:
       test: echo 'db.runCommand("ping").ok'
       interval: 10s
       timeout: 5s
       retries: 5
 
+  mongo-express:
+    container_name: singalong-dev-mongo-express
+    image: mongo-express:latest
+    ports:
+      - "8082:8081"
+    environment:
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGO_ROOT_USERNAME:-admin}
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGO_ROOT_PASSWORD:-admin}
+      - ME_CONFIG_MONGODB_URL=mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-admin}@mongodb:27017/
+      - ME_CONFIG_BASICAUTH=false
+    depends_on:
+      - mongodb
+    networks:
+      - singalong-dev-network
+
   minio:
+    container_name: singalong-dev-minio
     image: minio/minio:latest
     ports:
       - "9000:9000"
@@ -96,10 +122,10 @@ services:
       - MINIO_ROOT_USER=${MINIO_ACCESS_KEY:-minioadmin}
       - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY:-minioadmin}
     volumes:
-      - minio_data:/data
+      - minio-dev-data:/data
     command: minio server /data --console-address ":9001"
     networks:
-      - singalong-network
+      - singalong-dev-network
     healthcheck:
       test: curl -f http://localhost:9000/minio/health/live
       interval: 10s
@@ -114,14 +140,14 @@ services:
     depends_on:
       - server
     networks:
-      - singalong-network
+      - singalong-dev-network
     profiles:
       - optional
 
-volumes:
-  mongodb_data:
-  minio_data:
-
 networks:
-  singalong-network:
+  singalong-dev-network:
     driver: bridge
+
+volumes:
+  mongodb-dev-data:
+  minio-dev-data:

@@ -1,6 +1,14 @@
 // Core Domain Models for Singalong Karaoke System
 
 /**
+ * User role types
+ */
+export enum UserRole {
+  ADMIN = "admin",
+  USER = "user"
+}
+
+/**
  * Room represents a karaoke session space
  * Each room has a 6-digit ID users can join with
  */
@@ -37,7 +45,7 @@ export interface User {
   id: string;                    // UUID, PK, server-assigned
   nickname: string;              // UNIQUE globally across server
   passwordHash?: string;         // bcrypt hash; undefined = no password protection
-  role: "admin" | "user";        // Admin vs regular user
+  role: UserRole;                // Admin vs regular user
   roomId?: string;               // Current room ID (undefined = not in any room)
   joinedAt?: number;             // When user joined current room
   lastActivity?: number;         // Last action timestamp (for 10-min idle detection)

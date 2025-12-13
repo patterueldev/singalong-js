@@ -1,6 +1,6 @@
 // Shared utility functions used across server and client apps
 
-import { User, Room, ReservedSong, Song } from "./models";
+import { User, Room, ReservedSong, Song, UserRole } from "./models";
 
 /**
  * Generate a 6-digit room number (000000-999999)
@@ -112,7 +112,7 @@ export function parseQRCodeRoomNumber(qrData: string): string | null {
  * Check if user can control playback of a song (admin or owner)
  */
 export function canUserControlPlayback(user: User, reservedSong: ReservedSong): boolean {
-  return user.role === "admin" || user.id === reservedSong.reservedBy;
+  return user.role === UserRole.ADMIN || user.id === reservedSong.reservedBy;
 }
 
 /**

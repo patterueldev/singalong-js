@@ -1,6 +1,6 @@
 import { AuthService } from '../auth';
 import { UserRepository, RoomRepository } from '../../db/repositories';
-import { User, Room } from 'singalong-shared';
+import { User, Room, UserRole } from 'singalong-shared';
 import * as authUtils from '../../utils/auth';
 
 // Mock the repositories
@@ -31,7 +31,7 @@ describe('AuthService', () => {
         id: 'admin-123',
         nickname: 'admin',
         passwordHash: 'hashed_password',
-        role: 'admin',
+        role: UserRole.ADMIN,
 
         lastActivity: Date.now(),
         songHistory: [],
@@ -72,7 +72,7 @@ describe('AuthService', () => {
         id: 'user-123',
         nickname: 'regularuser',
         passwordHash: 'hashed_password',
-        role: 'user',
+        role: UserRole.USER,
 
         lastActivity: Date.now(),
         songHistory: [],
@@ -91,7 +91,7 @@ describe('AuthService', () => {
         id: 'admin-123',
         nickname: 'admin',
         passwordHash: undefined,
-        role: 'admin',
+        role: UserRole.ADMIN,
         roomId: undefined,
         joinedAt: undefined,
         lastActivity: Date.now(),
@@ -111,7 +111,7 @@ describe('AuthService', () => {
         id: 'admin-123',
         nickname: 'admin',
         passwordHash: 'hashed_password',
-        role: 'admin',
+        role: UserRole.ADMIN,
         lastActivity: Date.now(),
         songHistory: [],
       };
@@ -144,7 +144,7 @@ describe('AuthService', () => {
       mockUserRepo.create = jest.fn().mockResolvedValue({
         id: 'user-123',
         nickname: 'newuser',
-        role: 'user',
+        role: UserRole.USER,
         roomId: 'room-123',
         joinedAt: Date.now(),
         lastActivity: Date.now(),
@@ -161,7 +161,7 @@ describe('AuthService', () => {
       expect(mockRoomRepo.findByRoomNumber).toHaveBeenCalledWith('123456');
       expect(mockUserRepo.create).toHaveBeenCalledWith(expect.objectContaining({
         nickname: 'newuser',
-        role: 'user',
+        role: UserRole.USER,
         roomId: 'room-123',
       }));
     });
@@ -212,7 +212,7 @@ describe('AuthService', () => {
         id: 'user-existing',
         nickname: 'takenname',
         passwordHash: undefined,
-        role: 'user',
+        role: UserRole.USER,
         roomId: 'room-123',
         joinedAt: Date.now() - 1000,
         lastActivity: Date.now(),

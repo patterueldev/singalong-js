@@ -1,4 +1,4 @@
-import { Room, User, Session, ReservedSong } from "singalong-shared";
+import { Room, User, Session, ReservedSong, UserRole } from "singalong-shared";
 import { RoomRepository, UserRepository, QueueRepository } from "../db/repositories";
 import { generateRoomNumber, generateQRCode, hashPassword } from "../utils/auth";
 
@@ -33,7 +33,7 @@ export class RoomService {
     const admin = await this.userRepo.create({
       nickname: adminNickname,
       passwordHash,
-      role: "admin",
+      role: UserRole.ADMIN,
       songHistory: [],
     });
 

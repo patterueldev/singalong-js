@@ -1,0 +1,78 @@
+name: singalong-test
+
+services:
+  server:
+    container_name: singalong-test-server
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    ports:
+      - "3100:3000"  # Use different host port for test server
+    environment:
+      - MONGODB_URI=mongodb://admin:admin@mongodb:27017/singalong-test?authSource=admin
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET_NAME=singalong-test
+      - NODE_ENV=test
+      - DEFAULT_ADMIN_USERNAME=admin
+      - DEFAULT_ADMIN_PASSWORD=P@ssw0rd!
+      - MEDIA_PROVIDER_API_KEY=test-key
+      - OPENAI_API_KEY=test-key
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    volumes:
+      - ./server/src:/app/server/src
+      - /app/server/node_modules
+      - /app/server/dist
+    networks:
+      - singalong-test-network
+
+  mongodb:
+    container_name: singalong-test-mongodb
+    image: mongo:7.0
+    ports:
+      - "27018:27017"  # Use different host port for test
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=admin
+    volumes:
+      - mongodb-test-data:/data/db
+    networks:
+      - singalong-test-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    container_name: singalong-test-minio
+    image: minio/minio:latest
+    ports:
+      - "9002:9000"  # Use different host ports for test
+      - "9003:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-test-data:/data
+    networks:
+      - singalong-test-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  singalong-test-network:
+    driver: bridge
+
+volumes:
+  mongodb-test-data:
+  minio-test-data:

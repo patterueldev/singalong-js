@@ -1,4 +1,5 @@
 import { Router, Request, Response } from "express";
+import { UserRole } from "singalong-shared";
 import { QueueService } from "../services/queue";
 import { authenticate } from "../middleware/auth";
 
@@ -64,7 +65,7 @@ export function createQueueRouter(queueService: QueueService): Router {
         });
       }
 
-      const isAdmin = req.user!.role === "admin";
+      const isAdmin = req.user!.role === UserRole.ADMIN;
       const queueItem = await queueService.playPause(queueItemId, req.user!.id, isAdmin);
 
       res.json({
@@ -92,7 +93,7 @@ export function createQueueRouter(queueService: QueueService): Router {
         });
       }
 
-      const isAdmin = req.user!.role === "admin";
+      const isAdmin = req.user!.role === UserRole.ADMIN;
       await queueService.skipSong(queueItemId, req.user!.id, isAdmin);
 
       res.json({
@@ -120,7 +121,7 @@ export function createQueueRouter(queueService: QueueService): Router {
         });
       }
 
-      const isAdmin = req.user!.role === "admin";
+      const isAdmin = req.user!.role === UserRole.ADMIN;
       await queueService.cancelSong(queueItemId, req.user!.id, isAdmin);
 
       res.json({

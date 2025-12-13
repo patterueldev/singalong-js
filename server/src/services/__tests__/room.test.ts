@@ -1,6 +1,6 @@
 import { RoomService } from '../room';
 import { RoomRepository, UserRepository, QueueRepository } from '../../db/repositories';
-import { Room, User } from 'singalong-shared';
+import { Room, User, UserRole } from 'singalong-shared';
 import * as authUtils from '../../utils/auth';
 
 jest.mock('../../db/repositories');
@@ -27,7 +27,7 @@ describe('RoomService', () => {
         id: 'admin-123',
         nickname: 'admin',
         passwordHash: 'hashed_password',
-        role: 'admin',
+        role: UserRole.ADMIN,
         roomId: undefined,
         joinedAt: undefined,
         lastActivity: Date.now(),
@@ -60,7 +60,7 @@ describe('RoomService', () => {
       expect(result.admin.nickname).toBe('admin');
       expect(mockUserRepo.create).toHaveBeenCalledWith(expect.objectContaining({
         nickname: 'admin',
-        role: 'admin',
+        role: UserRole.ADMIN,
       }));
       expect(mockRoomRepo.create).toHaveBeenCalledWith(expect.objectContaining({
         roomNumber: '123456',
@@ -86,7 +86,7 @@ describe('RoomService', () => {
         id: 'admin-123',
         nickname: 'admin',
         passwordHash: 'hashed_password',
-        role: 'admin',
+        role: UserRole.ADMIN,
         roomId: null,
         joinedAt: null,
         lastActivity: Date.now(),
@@ -136,7 +136,7 @@ describe('RoomService', () => {
         id: 'admin-123',
         nickname: 'admin',
         passwordHash: 'hashed_password',
-        role: 'admin',
+        role: UserRole.ADMIN,
         roomId: null,
         joinedAt: null,
         lastActivity: Date.now(),

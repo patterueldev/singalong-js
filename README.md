@@ -23,7 +23,7 @@ A decentralized, cross-platform karaoke system where users host their own server
 ### Prerequisites
 - Node.js 18+
 - **pnpm 8+** (install globally: `npm install -g pnpm`)
-- Docker and Docker Compose (optional, for containerized setup)
+- Docker and Docker Compose
 
 ### Development Setup
 
@@ -31,22 +31,39 @@ A decentralized, cross-platform karaoke system where users host their own server
 # Install pnpm globally (if not already installed)
 npm install -g pnpm
 
-# Install all dependencies for all workspaces
+# Install all dependencies
 pnpm install
 
-# Start all services with Docker
-docker-compose up
+# Start infrastructure (MongoDB + MinIO)
+docker-compose up mongodb minio -d
 
-# Or start individually:
-npm run dev:server          # Start server on http://localhost:3000
-npm run dev:admin           # Start admin app on http://localhost:3001
-npm run dev:controller      # Start controller app on http://localhost:3002
-npm run dev:player          # Start player app on http://localhost:3003
+# Start server
+pnpm --filter server run dev
+
+# Or start all services with Docker
+docker-compose up
 ```
 
-### Environment Variables
+### Run Tests
 
-Copy `.env.example` to `.env` and configure:
+```bash
+# Quick test - verify API is working
+./scripts/test-runtime.sh
+
+# Full test suite - cleanup, build, test, verify
+./scripts/run-tests.sh
+```
+
+See [TESTING.md](TESTING.md) for detailed testing guide.
+
+### Environment Configuration
+
+Three environments available:
+- **Development** (`.env.development`) - Active development
+- **Test** (`.env.test`) - Isolated testing
+- **Production** (`.env.production`) - Deployment
+
+See [ENVIRONMENTS.md](ENVIRONMENTS.md) for complete setup guide.
 
 ```bash
 # MongoDB

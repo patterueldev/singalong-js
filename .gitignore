@@ -47,6 +47,9 @@ yarn-error.log*
 *.swo
 *~
 
+# Data folders (MongoDB and MinIO)
+/data/
+
 # Expo
 .expo/
 .expo-shared/

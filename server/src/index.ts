@@ -7,11 +7,19 @@ import swaggerUi from "swagger-ui-express";
 import YAML from "yamljs";
 import path from "path";
 
-// Load environment variables
-dotenv.config();
+// Load environment-specific config
+const env = process.env.NODE_ENV || "development";
+// Look for .env file in project root (parent of server directory)
+const projectRoot = path.resolve(__dirname, "../..");
+const envPath = path.resolve(projectRoot, `.env.${env}`);
+dotenv.config({ path: envPath });
+
+console.log(`🔧 Environment: ${env}`);
+console.log(`📄 Config loaded from: ${envPath}`);
 
 // Import database
 import { connectToDatabase, getDatabase } from "./db/connection";
+import { initializeDatabase } from "./db/init";
 
 // Import repositories
 import {
@@ -62,6 +70,9 @@ async function startServer() {
     // Connect to database
     const db = await connectToDatabase();
     console.log("✓ Database connected");
+
+    // Initialize database with default data
+    await initializeDatabase(db);
 
     // Initialize repositories
     const roomRepo = new RoomRepository(db);

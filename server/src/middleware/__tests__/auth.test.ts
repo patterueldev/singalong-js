@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { authenticate } from '../auth';
 import { AuthService } from '../../services/auth';
-import { User } from 'singalong-shared';
+import { User, UserRole } from 'singalong-shared';
 
 // Mock AuthService
 jest.mock('../../services/auth');
@@ -40,7 +40,7 @@ describe('Auth Middleware', () => {
       const mockUser: User = {
         id: 'user-123',
         nickname: 'testuser',
-        role: 'user',
+        role: UserRole.USER,
         lastActivity: Date.now(),
         songHistory: [],
       };

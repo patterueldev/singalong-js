@@ -1,5 +1,6 @@
 // Server-specific models and API types
 // Client models imported from singalong-shared
+import { UserRole } from "singalong-shared";
 
 export interface AuthLoginRequest {
   nickname: string;
@@ -12,7 +13,7 @@ export interface AuthLoginResponse {
   user: {
     id: string;
     nickname: string;
-    role: "admin" | "user";
+    role: UserRole;
   };
 }
 
@@ -28,7 +29,7 @@ export interface RoomJoinResponse {
   user: {
     id: string;
     nickname: string;
-    role: "admin" | "user";
+    role: UserRole;
   };
 }
 

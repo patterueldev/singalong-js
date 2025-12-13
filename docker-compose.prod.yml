@@ -1,0 +1,96 @@
+name: singalong-prod
+
+services:
+  server:
+    container_name: singalong-prod-server
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+      args:
+        - NODE_ENV=production
+    ports:
+      - "3000:3000"
+    environment:
+      - MONGODB_URI=${MONGODB_URI}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET_NAME=singalong
+      - NODE_ENV=production
+      - DEFAULT_ADMIN_USERNAME=${DEFAULT_ADMIN_USERNAME}
+      - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD}
+      - MEDIA_PROVIDER_API_KEY=${MEDIA_PROVIDER_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    networks:
+      - singalong-prod-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  mongodb:
+    container_name: singalong-prod-mongodb
+    image: mongo:7.0
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
+    volumes:
+      - ${MONGODB_DATA_PATH:-/var/lib/singalong/mongodb}:/data/db
+    networks:
+      - singalong-prod-network
+    restart: unless-stopped
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    container_name: singalong-prod-minio
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY}
+      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY}
+    command: server /data --console-address ":9001"
+    volumes:
+      - ${MINIO_DATA_PATH:-/var/lib/singalong/minio}:/data
+    networks:
+      - singalong-prod-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Backup service (optional, can be enabled in production)
+  # mongodb-backup:
+  #   image: mongo:7.0
+  #   depends_on:
+  #     - mongodb
+  #   volumes:
+  #     - ./backups:/backups
+  #   command: >
+  #     sh -c "while true; do
+  #       mongodump --uri=\"${MONGODB_URI}\" --out=/backups/backup-$$(date +%Y%m%d-%H%M%S);
+  #       sleep 86400;
+  #     done"
+  #   networks:
+  #     - singalong-prod-network
+
+networks:
+  singalong-prod-network:
+    driver: bridge
