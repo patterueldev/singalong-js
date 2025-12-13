@@ -67,12 +67,17 @@ app.get("/health", (req, res) => {
 // Initialize and start server
 async function startServer() {
   try {
+    console.log("🚀 Starting Singalong Server...");
+    console.log("");
+    
     // Connect to database
     const db = await connectToDatabase();
     console.log("✓ Database connected");
+    console.log("");
 
     // Initialize database with default data
     await initializeDatabase(db);
+    console.log("");
 
     // Initialize repositories
     const roomRepo = new RoomRepository(db);

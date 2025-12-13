@@ -9,10 +9,11 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - MONGODB_URI=mongodb://admin:admin@mongodb:27017/singalong?authSource=admin
+      - MONGODB_URI=mongodb://admin:admin@mongodb:27017/singalong-dev?authSource=admin
       - MINIO_ENDPOINT=http://minio:9000
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - MINIO_BUCKET_NAME=singalong-dev
       - MEDIA_PROVIDER_API_KEY=${MEDIA_PROVIDER_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - NODE_ENV=development

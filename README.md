@@ -22,65 +22,292 @@ A decentralized, cross-platform karaoke system where users host their own server
 
 ### Prerequisites
 - Node.js 18+
-- **pnpm 8+** (install globally: `npm install -g pnpm`)
+- **pnpm 8+** (⚠️ **Required** - install: `npm install -g pnpm`)
 - Docker and Docker Compose
 
-### Development Setup
+### Installation
 
 ```bash
-# Install pnpm globally (if not already installed)
-npm install -g pnpm
+# 1. Clone the repository
+git clone <repository-url>
+cd singalong-js
 
-# Install all dependencies
+# 2. Install dependencies (always use pnpm!)
 pnpm install
-
-# Start infrastructure (MongoDB + MinIO)
-docker-compose up mongodb minio -d
-
-# Start server
-pnpm --filter server run dev
-
-# Or start all services with Docker
-docker-compose up
 ```
 
-### Run Tests
+## 🏃 Running the Application
+
+### Option 1: Development with Docker (Recommended)
+
+Start all services in Docker containers:
 
 ```bash
-# Quick test - verify API is working
-./scripts/test-runtime.sh
+# Start everything (server, MongoDB, MinIO, all client apps)
+docker-compose up
 
-# Full test suite - cleanup, build, test, verify
+# Or start in background
+docker-compose up -d
+
+# View logs
+docker-compose logs -f server
+
+# Stop all services
+docker-compose down
+```
+
+**Access points:**
+- Server API: http://localhost:3000
+- API Docs: http://localhost:3000/api-docs
+- Admin App: http://localhost:3001
+- Controller App: http://localhost:3002
+- Player App: http://localhost:3003
+- MongoDB: localhost:27017
+- MinIO Console: http://localhost:9001
+- Mongo Express: http://localhost:8082
+
+### Option 2: Local Development (Server only)
+
+Run the server locally while using Docker for database/storage:
+
+```bash
+# 1. Start infrastructure only
+docker-compose up mongodb minio -d
+
+# 2. Start server locally
+pnpm --filter server run dev
+
+# Server will run at http://localhost:3000
+```
+
+**Benefits of local development:**
+- Faster reload on code changes
+- Easier debugging with breakpoints
+- Direct access to TypeScript source
+
+### Option 3: Run Specific Services
+
+```bash
+# Start only what you need
+docker-compose up mongodb minio -d              # Just infrastructure
+docker-compose up server -d                     # Add server
+docker-compose up admin-app -d                  # Add admin app
+
+# Or run client apps locally
+pnpm --filter admin-app run start
+pnpm --filter controller-app run start
+pnpm --filter player-app run start
+```
+
+## 🧪 Testing
+
+### Automated Test Suite
+
+Run complete tests with fresh data (recommended before commits):
+
+```bash
 ./scripts/run-tests.sh
 ```
 
-See [TESTING.md](TESTING.md) for detailed testing guide.
+**What it does:**
+1. Stops all Docker containers
+2. Removes old test data (fresh start)
+3. Installs dependencies
+4. Builds TypeScript
+5. Starts test infrastructure (MongoDB on port 27018, MinIO on 9002-9003)
+6. Starts test server
+7. Runs unit tests
+8. Tests all API endpoints (health, auth, rooms, queue)
+9. Checks performance
+10. Cleans up everything
 
-### Environment Configuration
+**Duration:** ~1-2 minutes
 
-Three environments available:
-- **Development** (`.env.development`) - Active development
-- **Test** (`.env.test`) - Isolated testing
-- **Production** (`.env.production`) - Deployment
+### Quick API Test
 
-See [ENVIRONMENTS.md](ENVIRONMENTS.md) for complete setup guide.
+If server is already running:
 
 ```bash
-# MongoDB
-MONGODB_URI=mongodb://localhost:27017/singalong
+./scripts/test-runtime.sh
+```
 
-# MinIO (S3-compatible storage)
-MINIO_ENDPOINT=http://localhost:9000
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=minioadmin
+Tests health, login, API docs in ~5 seconds.
 
-# APIs
-OPENAI_API_KEY=sk-...
-YOUTUBE_API_KEY=...
+### Development Testing
 
-# Expo
-EXPO_USERNAME=your_expo_username
-EXPO_PASSWORD=your_expo_password
+```bash
+# Unit tests only
+pnpm --filter server run test
+
+# Watch mode (auto-rerun on changes)
+pnpm --filter server run test:watch
+
+# Integration tests
+pnpm --filter server run test:integration
+```
+
+See [TESTING.md](TESTING.md) for complete testing guide.
+
+## 🔧 Environment Configuration
+
+Three environments with isolated data:
+
+| Environment | Database Port | MinIO Ports | Use Case |
+|-------------|---------------|-------------|----------|
+| **Development** | 27017 | 9000-9001 | Active coding |
+| **Test** | 27018 | 9002-9003 | Automated tests |
+| **Production** | 27017 | 9000-9001 | Deployment |
+
+### Quick Environment Setup
+
+Development is pre-configured and ready to use:
+
+```bash
+# Development (default)
+docker-compose up -d
+
+# Test (used by test script)
+docker-compose -f docker-compose.test.yml up -d
+
+# Production
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+**Environment files:**
+- `.env.development` - Ready to use
+- `.env.test` - Used by test script
+- `.env.production` - ⚠️ Update passwords before deploying!
+
+See [ENVIRONMENTS.md](ENVIRONMENTS.md) for detailed configuration.
+
+## 🐳 Docker Management
+
+### View Running Containers
+
+```bash
+# All singalong containers
+docker ps | grep singalong
+
+# Specific environment
+docker ps | grep singalong-dev
+docker ps | grep singalong-test
+```
+
+### Stop/Remove Containers
+
+```bash
+# Stop development
+docker-compose down
+
+# Stop and remove volumes (fresh start)
+docker-compose down -v
+
+# Stop test environment
+docker-compose -f docker-compose.test.yml down -v
+```
+
+### View Logs
+
+```bash
+# Follow server logs
+docker-compose logs -f server
+
+# All logs
+docker-compose logs -f
+
+# Specific container
+docker logs singalong-dev-mongodb
+```
+
+### Clean Up Everything
+
+```bash
+# Remove all singalong containers and volumes
+docker stop $(docker ps -a | grep singalong | awk '{print $1}')
+docker rm $(docker ps -a | grep singalong | awk '{print $1}')
+docker volume rm $(docker volume ls | grep singalong | awk '{print $2}')
+```
+
+See [DOCKER.md](DOCKER.md) for complete Docker guide.
+
+## 📦 Package Manager
+
+⚠️ **CRITICAL: Always use `pnpm`, never `npm` or `yarn`**
+
+This is a monorepo managed with pnpm workspaces:
+
+```bash
+# ✅ Correct
+pnpm install
+pnpm --filter server run dev
+pnpm run build --workspaces
+
+# ❌ Wrong - Don't use these!
+npm install
+yarn install
+npm run dev
+```
+
+## 🛠️ Development Workflow
+
+### Daily Development
+
+```bash
+# 1. Start infrastructure
+docker-compose up mongodb minio -d
+
+# 2. Start server with hot reload
+pnpm --filter server run dev
+
+# 3. Make changes to code...
+
+# 4. Test your changes
+./scripts/test-runtime.sh
+
+# 5. Before committing
+./scripts/run-tests.sh
+git add .
+git commit -m "Your changes"
+```
+
+### Building for Production
+
+```bash
+# Build all workspaces
+pnpm run build --workspaces
+
+# Or build specific workspace
+pnpm --filter server run build
+pnpm --filter admin-app run build
+```
+
+### Troubleshooting
+
+**Port already in use:**
+```bash
+# Find and kill process
+lsof -i :3000
+kill -9 <PID>
+
+# Or stop Docker containers
+docker-compose down
+```
+
+**Database connection issues:**
+```bash
+# Check MongoDB is running
+docker ps | grep mongodb
+
+# Restart MongoDB
+docker-compose restart mongodb
+```
+
+**Clean slate (nuclear option):**
+```bash
+# Remove everything and start fresh
+docker-compose down -v
+pnpm install
+docker-compose up -d
 ```
 
 ## 📁 Project Structure

@@ -12,9 +12,16 @@ export class AuthService {
   ) {}
 
   async adminLogin(nickname: string, password: string): Promise<{ user: User; sessionToken: string }> {
+    console.log(`🔐 Admin login attempt for: ${nickname}`);
     const user = await this.userRepo.findByNickname(nickname);
+    console.log(`   User found: ${!!user}`);
+    if (user) {
+      console.log(`   User role: ${user.role}`);
+      console.log(`   Has passwordHash: ${!!user.passwordHash}`);
+    }
 
     if (!user) {
+      console.log("   ❌ User not found");
       throw new Error("Invalid credentials");
     }
 
@@ -27,7 +34,9 @@ export class AuthService {
     }
 
     const isValid = await comparePassword(password, user.passwordHash);
+    console.log(`   Password valid: ${isValid}`);
     if (!isValid) {
+      console.log("   ❌ Password mismatch");
       throw new Error("Invalid credentials");
     }
 
